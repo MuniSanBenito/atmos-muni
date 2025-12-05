@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="80" fill="#1e3a5f"/>
+  <g fill="#ffffff">
+    <!-- Camión -->
+    <rect x="80" y="280" width="200" height="120" rx="10"/>
+    <rect x="280" y="320" width="100" height="80" rx="10"/>
+    <circle cx="140" cy="420" r="35"/>
+    <circle cx="330" cy="420" r="35"/>
+    <!-- Tanque -->
+    <ellipse cx="180" cy="280" rx="90" ry="60"/>
+    <!-- Texto -->
+    <text x="256" y="180" font-family="Arial, sans-serif" font-size="60" font-weight="bold" text-anchor="middle">ATMOS</text>
+  </g>
+</svg>
