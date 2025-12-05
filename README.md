@@ -1,67 +1,138 @@
-# Payload Blank Template
+# 🚛 Atmos San Benito
 
-This template comes configured with the bare minimum to get started on anything you need.
+**Sistema de Gestión de Servicios Atmosféricos para la Municipalidad de San Benito**
 
-## Quick start
+---
 
-This template can be deployed directly from our Cloud hosting and it will setup MongoDB and cloud S3 object storage for media.
+## 📋 ¿Qué es Atmos?
 
-## Quick Start - local setup
+Atmos es una plataforma web diseñada para gestionar de manera eficiente el servicio de desagotes atmosféricos de la Municipalidad de San Benito. El sistema permite coordinar solicitudes de servicio entre los vecinos, los despachadores municipales y los choferes de los camiones atmosféricos.
 
-To spin up this template locally, follow these steps:
+### 🎯 Funcionalidades Principales
 
-### Clone
+- **Gestión de Solicitudes**: Registro y seguimiento de pedidos de desagote atmosférico
+- **Panel de Despacho**: Los despachadores pueden crear, asignar y organizar el orden de las solicitudes
+- **App para Choferes**: Interfaz móvil optimizada para que los conductores vean sus tareas asignadas
+- **Seguimiento en Tiempo Real**: Estados de solicitud (Pendiente → En Camino → Realizada/No Realizada)
+- **Estadísticas**: Dashboard con métricas del servicio (solicitudes del mes, tasa de éxito, etc.)
+- **Tipos de Servicio**: Soporte para servicios subsidiados y pagados
+- **Captura de GPS**: Los choferes pueden registrar coordenadas al completar servicios
+- **PWA (Progressive Web App)**: Instalable en dispositivos móviles para uso offline
 
-After you click the `Deploy` button above, you'll want to have standalone copy of this repo on your machine. If you've already cloned this repo, skip to [Development](#development).
+### 👥 Roles del Sistema
 
-### Development
+| Rol                 | Descripción                                               |
+| ------------------- | --------------------------------------------------------- |
+| **Admin**           | Acceso completo al sistema y panel de administración      |
+| **Dispatcher**      | Crea y gestiona solicitudes, organiza el orden de trabajo |
+| **Driver (Chofer)** | Ve las solicitudes asignadas y actualiza su estado        |
 
-1. First [clone the repo](#clone) if you have not done so already
-2. `cd my-project && cp .env.example .env` to copy the example environment variables. You'll need to add the `MONGODB_URI` from your Cloud project to your `.env` if you want to use S3 storage and the MongoDB database that was created for you.
+---
 
-3. `pnpm install && pnpm dev` to install dependencies and start the dev server
-4. open `http://localhost:3000` to open the app in your browser
+## 🚀 Despliegue
 
-That's it! Changes made in `./src` will be reflected in your app. Follow the on-screen instructions to login and create your first admin user. Then check out [Production](#production) once you're ready to build and serve your app, and [Deployment](#deployment) when you're ready to go live.
+### Requisitos Previos
 
-#### Docker (Optional)
+- Node.js 18+ (recomendado 22.x)
+- pnpm (gestor de paquetes)
+- MongoDB (local o en la nube)
 
-If you prefer to use Docker for local development instead of a local MongoDB instance, the provided docker-compose.yml file can be used.
+### Opción 1: Desarrollo Local
 
-To do so, follow these steps:
+1. **Clonar el repositorio**
 
-- Modify the `MONGODB_URI` in your `.env` file to `mongodb://127.0.0.1/<dbname>`
-- Modify the `docker-compose.yml` file's `MONGODB_URI` to match the above `<dbname>`
-- Run `docker-compose up` to start the database, optionally pass `-d` to run in the background.
+   ```bash
+   git clone https://github.com/MuniSanBenito/atmos-muni.git
+   cd atmos-muni
+   ```
 
-## How it works
+2. **Configurar variables de entorno**
 
-The Payload config is tailored specifically to the needs of most websites. It is pre-configured in the following ways:
+   ```bash
+   cp .env.example .env
+   ```
 
-### Collections
+   Editar el archivo `.env` con tus configuraciones:
 
-See the [Collections](https://payloadcms.com/docs/configuration/collections) docs for details on how to extend this functionality.
+   ```env
+   MONGODB_URI=mongodb://localhost:27017/atmos-muni
+   PAYLOAD_SECRET=tu-clave-secreta-aqui
+   ```
 
-- #### Users (Authentication)
+3. **Instalar dependencias e iniciar**
 
-  Users are auth-enabled collections that have access to the admin panel.
+   ```bash
+   pnpm install
+   pnpm dev
+   ```
 
-  For additional help, see the official [Auth Example](https://github.com/payloadcms/payload/tree/main/examples/auth) or the [Authentication](https://payloadcms.com/docs/authentication/overview#authentication-overview) docs.
+4. **Acceder a la aplicación**
+   - Frontend: [http://localhost:3000](http://localhost:3000)
+   - Panel Admin: [http://localhost:3000/admin](http://localhost:3000/admin)
 
-- #### Media
+### Opción 2: Con Docker (Recomendado)
 
-  This is the uploads enabled collection. It features pre-configured sizes, focal point and manual resizing to help you manage your pictures.
+Esta opción incluye MongoDB automáticamente.
 
-### Docker
+1. **Clonar y configurar**
 
-Alternatively, you can use [Docker](https://www.docker.com) to spin up this template locally. To do so, follow these steps:
+   ```bash
+   git clone https://github.com/MuniSanBenito/atmos-muni.git
+   cd atmos-muni
+   cp .env.example .env
+   ```
 
-1. Follow [steps 1 and 2 from above](#development), the docker-compose file will automatically use the `.env` file in your project root
-1. Next run `docker-compose up`
-1. Follow [steps 4 and 5 from above](#development) to login and create your first admin user
+2. **Configurar la URI de MongoDB para Docker**
 
-That's it! The Docker instance will help you get up and running quickly while also standardizing the development environment across your teams.
+   En el archivo `.env`, usar:
 
-## Questions
+   ```env
+   MONGODB_URI=mongodb://mongo:27017/atmos-muni
+   ```
 
-If you have any issues or questions, reach out to us on [Discord](https://discord.com/invite/payload) or start a [GitHub discussion](https://github.com/payloadcms/payload/discussions).
+3. **Levantar los contenedores**
+
+   ```bash
+   docker-compose up
+   ```
+
+   Para ejecutar en segundo plano:
+
+   ```bash
+   docker-compose up -d
+   ```
+
+4. **Acceder a la aplicación** en [http://localhost:3000](http://localhost:3000)
+
+### Opción 3: Producción con Docker
+
+1. **Construir la imagen de producción**
+
+   ```bash
+   docker build -t atmos-muni .
+   ```
+
+2. **Ejecutar el contenedor**
+   ```bash
+   docker run -p 3000:3000 --env-file .env atmos-muni
+   ```
+
+---
+
+## 📱 Instalación como App Móvil (PWA)
+
+Los choferes pueden instalar Atmos directamente en sus celulares:
+
+1. Abrir [https://tu-dominio.com](https://tu-dominio.com) en Chrome
+2. Tocar el menú (⋮) → "Instalar app" o "Agregar a pantalla de inicio"
+3. La app funcionará incluso sin conexión para consultar información
+
+---
+
+## 🏛️ Municipalidad de San Benito
+
+Desarrollado para optimizar el servicio de desagotes atmosféricos y mejorar la atención a los vecinos de San Benito.
+
+---
+
+_Sistema construido con Next.js, Payload CMS y MongoDB_
