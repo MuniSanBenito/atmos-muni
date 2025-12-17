@@ -10,6 +10,7 @@ interface Solicitud {
   apellido: string
   telefono: string
   direccion: string
+  barrio?: { id: string; nombre: string } | null
   tipoPago: 'subsidiado' | 'pagado'
   coordenadas?: string
   notas?: string
@@ -280,6 +281,9 @@ export default function SolicitudesPage() {
                               d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
                             />
                           </svg>
+                          {solicitud.barrio?.nombre && (
+                            <span className="font-medium">{solicitud.barrio.nombre} - </span>
+                          )}
                           {solicitud.direccion}
                         </div>
                         <div className="flex items-center gap-2">
@@ -385,6 +389,12 @@ export default function SolicitudesPage() {
               <div>
                 <h3 className="text-sm font-semibold text-gray-500 mb-3">Ubicación</h3>
                 <div className="space-y-3">
+                  {selectedSolicitud.barrio && (
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Barrio</p>
+                      <p className="font-medium text-neutral">{selectedSolicitud.barrio.nombre}</p>
+                    </div>
+                  )}
                   <div>
                     <p className="text-xs text-gray-500 mb-1">Dirección</p>
                     <p className="font-medium text-neutral">{selectedSolicitud.direccion}</p>

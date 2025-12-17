@@ -4,16 +4,24 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../../../../context/AuthContext'
 
+interface Barrio {
+  id: string
+  nombre: string
+  orden: number
+}
+
 export default function NuevaSolicitudPage() {
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [barrios, setBarrios] = useState<Barrio[]>([])
 
   const [formData, setFormData] = useState({
     nombre: '',
     apellido: '',
     telefono: '',
+    barrio: '',
     direccion: '',
     tipoPago: 'subsidiado',
     coordenadas: '',
@@ -27,9 +35,26 @@ export default function NuevaSolicitudPage() {
       } else if (user.role === 'driver') {
         // Si es chofer, redirigir a su panel
         router.replace('/servicio')
+      } else {
+        // Cargar barrios
+        fetchBarrios()
       }
     }
   }, [user, authLoading, router])
+
+  const fetchBarrios = async () => {
+    try {
+      const response = await fetch('/api/barrios', {
+        credentials: 'include',
+      })
+      const data = await response.json()
+      if (data.success) {
+        setBarrios(data.barrios)
+      }
+    } catch (error) {
+      console.error('Error al cargar barrios:', error)
+    }
+  }
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
@@ -182,23 +207,48 @@ export default function NuevaSolicitudPage() {
                 Información de Ubicación
               </h2>
               <div className="space-y-6">
-                <div>
-                  <label
-                    htmlFor="direccion"
-                    className="block text-sm font-semibold text-neutral mb-2"
-                  >
-                    Dirección <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    id="direccion"
-                    name="direccion"
-                    type="text"
-                    value={formData.direccion}
-                    onChange={handleChange}
-                    required
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all"
-                    placeholder="Ej: Calle 25 de Mayo 123"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label
+                      htmlFor="barrio"
+                      className="block text-sm font-semibold text-neutral mb-2"
+                    >
+                      Barrio <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      id="barrio"
+                      name="barrio"
+                      value={formData.barrio}
+                      onChange={handleChange}
+                      required
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all bg-white"
+                    >
+                      <option value="">Seleccione un barrio</option>
+                      {barrios.map((barrio) => (
+                        <option key={barrio.id} value={barrio.id}>
+                          {barrio.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="direccion"
+                      className="block text-sm font-semibold text-neutral mb-2"
+                    >
+                      Dirección <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="direccion"
+                      name="direccion"
+                      type="text"
+                      value={formData.direccion}
+                      onChange={handleChange}
+                      required
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all"
+                      placeholder="Ej: Calle 25 de Mayo 123"
+                    />
+                  </div>
                 </div>
 
                 <div>

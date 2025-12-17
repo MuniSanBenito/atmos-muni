@@ -4,12 +4,19 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../../../context/AuthContext'
 
+interface Barrio {
+  id: string
+  nombre: string
+  orden: number
+}
+
 interface Solicitud {
   id: string
   nombre: string
   apellido: string
   telefono: string
   direccion: string
+  barrio?: { id: string; nombre: string } | null
   tipoPago: 'subsidiado' | 'pagado'
   coordenadas?: string
   notas?: string
@@ -29,6 +36,8 @@ export default function ServicioPage() {
   const [notaFinal, setNotaFinal] = useState('')
   const [coordenadasCapturadas, setCoordenadasCapturadas] = useState('')
   const [capturandoGPS, setCapturandoGPS] = useState(false)
+  const [barrios, setBarrios] = useState<Barrio[]>([])
+  const [filtroBarrio, setFiltroBarrio] = useState<string>('')
 
   useEffect(() => {
     if (!loading) {
@@ -38,15 +47,41 @@ export default function ServicioPage() {
         // Si no es chofer, redirigir al home del dispatcher
         router.replace('/')
       } else {
+        fetchBarrios()
         fetchSolicitudes()
       }
     }
   }, [user, loading, router])
 
+  // Re-fetch when barrio filter changes
+  useEffect(() => {
+    if (user && user.role === 'driver') {
+      fetchSolicitudes()
+    }
+  }, [filtroBarrio])
+
+  const fetchBarrios = async () => {
+    try {
+      const response = await fetch('/api/barrios', {
+        credentials: 'include',
+      })
+      const data = await response.json()
+      if (data.success) {
+        setBarrios(data.barrios)
+      }
+    } catch (error) {
+      console.error('Error al cargar barrios:', error)
+    }
+  }
+
   const fetchSolicitudes = async () => {
     try {
       // Usar el filtro de activas para solo traer pendientes y en_camino
-      const response = await fetch('/api/solicitudes?activas=true', {
+      let url = '/api/solicitudes?activas=true'
+      if (filtroBarrio) {
+        url += `&barrio=${filtroBarrio}`
+      }
+      const response = await fetch(url, {
         credentials: 'include',
       })
       const data = await response.json()
@@ -308,8 +343,30 @@ export default function ServicioPage() {
         {/* Lista de Servicios */}
         <div className="bg-white rounded-xl shadow">
           <div className="p-6 border-b border-gray-200">
-            <h2 className="text-xl font-bold text-neutral">Servicios Activos</h2>
-            <p className="text-sm text-gray-600 mt-1">Servicios pendientes y en progreso</p>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-neutral">Servicios Activos</h2>
+                <p className="text-sm text-gray-600 mt-1">Servicios pendientes y en progreso</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <label htmlFor="filtroBarrio" className="text-sm font-medium text-gray-700">
+                  Filtrar por barrio:
+                </label>
+                <select
+                  id="filtroBarrio"
+                  value={filtroBarrio}
+                  onChange={(e) => setFiltroBarrio(e.target.value)}
+                  className="px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-white text-sm"
+                >
+                  <option value="">Todos los barrios</option>
+                  {barrios.map((barrio) => (
+                    <option key={barrio.id} value={barrio.id}>
+                      {barrio.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
 
           {loadingSolicitudes ? (
@@ -387,6 +444,9 @@ export default function ServicioPage() {
                               d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
                             />
                           </svg>
+                          {solicitud.barrio?.nombre && (
+                            <span className="font-medium">{solicitud.barrio.nombre} - </span>
+                          )}
                           {solicitud.direccion}
                         </div>
                       </div>
@@ -478,8 +538,13 @@ export default function ServicioPage() {
               </div>
 
               <div>
-                <h3 className="text-sm font-semibold text-gray-500 mb-3">Dirección</h3>
+                <h3 className="text-sm font-semibold text-gray-500 mb-3">Ubicación</h3>
                 <div className="bg-gray-50 rounded-lg p-4">
+                  {selectedSolicitud.barrio && (
+                    <p className="text-sm text-gray-500 mb-1">
+                      <span className="font-medium text-neutral">{selectedSolicitud.barrio.nombre}</span>
+                    </p>
+                  )}
                   <p className="font-medium text-neutral">{selectedSolicitud.direccion}</p>
                   {selectedSolicitud.coordenadas && (
                     <div className="mt-3 space-y-3">

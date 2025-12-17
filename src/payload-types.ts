@@ -70,6 +70,7 @@ export interface Config {
     users: User;
     media: Media;
     solicitudes: Solicitude;
+    barrios: Barrio;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -80,6 +81,7 @@ export interface Config {
     users: UsersSelect<false> | UsersSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
     solicitudes: SolicitudesSelect<false> | SolicitudesSelect<true>;
+    barrios: BarriosSelect<false> | BarriosSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -88,7 +90,6 @@ export interface Config {
   db: {
     defaultIDType: string;
   };
-  fallbackLocale: null;
   globals: {};
   globalsSelect: {};
   locale: null;
@@ -173,6 +174,10 @@ export interface Solicitude {
   apellido: string;
   telefono: string;
   direccion: string;
+  /**
+   * Seleccione el barrio de San Benito
+   */
+  barrio: string | Barrio;
   tipoPago: 'subsidiado' | 'pagado';
   /**
    * Formato: Latitud, Longitud (Ej: -26.123456, -54.654321)
@@ -182,6 +187,20 @@ export interface Solicitude {
   estado: 'pendiente' | 'en_camino' | 'realizada' | 'no_realizada';
   fechaRealizacion?: string | null;
   motivoNoRealizacion?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "barrios".
+ */
+export interface Barrio {
+  id: string;
+  nombre: string;
+  /**
+   * Número para ordenar los barrios en los listados
+   */
+  orden: number;
   updatedAt: string;
   createdAt: string;
 }
@@ -220,6 +239,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'solicitudes';
         value: string | Solicitude;
+      } | null)
+    | ({
+        relationTo: 'barrios';
+        value: string | Barrio;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -314,12 +337,23 @@ export interface SolicitudesSelect<T extends boolean = true> {
   apellido?: T;
   telefono?: T;
   direccion?: T;
+  barrio?: T;
   tipoPago?: T;
   coordenadas?: T;
   notas?: T;
   estado?: T;
   fechaRealizacion?: T;
   motivoNoRealizacion?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "barrios_select".
+ */
+export interface BarriosSelect<T extends boolean = true> {
+  nombre?: T;
+  orden?: T;
   updatedAt?: T;
   createdAt?: T;
 }

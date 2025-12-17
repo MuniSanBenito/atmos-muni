@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
         apellido: data.apellido,
         telefono: data.telefono,
         direccion: data.direccion,
+        barrio: data.barrio,
         tipoPago: data.tipoPago,
         coordenadas: data.coordenadas || '',
         notas: data.notas || '',
@@ -48,6 +49,7 @@ export async function GET(request: NextRequest) {
     // Filtros opcionales
     const estado = searchParams.get('estado')
     const soloActivas = searchParams.get('activas') === 'true'
+    const barrioId = searchParams.get('barrio')
 
     // Construir query
     let where: any = {}
@@ -57,6 +59,11 @@ export async function GET(request: NextRequest) {
     } else if (soloActivas) {
       // Solo pendientes y en_camino para el chofer
       where.estado = { in: ['pendiente', 'en_camino'] }
+    }
+
+    // Filtrar por barrio si se especifica
+    if (barrioId) {
+      where.barrio = { equals: barrioId }
     }
 
     const solicitudes = await payload.find({
