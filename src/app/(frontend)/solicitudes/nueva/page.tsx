@@ -44,7 +44,7 @@ export default function NuevaSolicitudPage() {
 
   const fetchBarrios = async () => {
     try {
-      const response = await fetch('/api/barrios', {
+      const response = await fetch('/api/get-barrios', {
         credentials: 'include',
       })
       const data = await response.json()
