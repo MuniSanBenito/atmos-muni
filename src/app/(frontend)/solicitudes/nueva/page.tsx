@@ -98,17 +98,17 @@ export default function NuevaSolicitudPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-neutral">Nueva Solicitud Atmosférica</h1>
-            <p className="text-sm text-gray-600">
-              Complete el formulario para registrar la solicitud
+      <header className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg sm:text-2xl font-bold text-neutral truncate">Nueva Solicitud</h1>
+            <p className="text-xs sm:text-sm text-gray-600">
+              Complete el formulario para registrar
             </p>
           </div>
           <button
             onClick={() => router.back()}
-            className="px-4 py-2 text-neutral border-2 border-neutral rounded-lg hover:bg-neutral hover:text-white transition-colors"
+            className="px-3 sm:px-4 py-2 text-neutral border-2 border-neutral rounded-lg hover:bg-neutral hover:text-white transition-colors text-sm whitespace-nowrap shrink-0"
           >
             Volver
           </button>
@@ -116,15 +116,15 @@ export default function NuevaSolicitudPage() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-6 py-8">
-        <div className="bg-white rounded-xl shadow-lg p-8">
-          <form onSubmit={handleSubmit} className="space-y-6">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        <div className="bg-white rounded-xl shadow-lg p-5 sm:p-8">
+          <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
             {/* Información Personal */}
             <div>
-              <h2 className="text-xl font-bold text-neutral mb-4 pb-2 border-b-2 border-primary">
+              <h2 className="text-base sm:text-xl font-bold text-neutral mb-3 sm:mb-4 pb-2 border-b-2 border-primary">
                 Información del Solicitante
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                 <div>
                   <label htmlFor="nombre" className="block text-sm font-semibold text-neutral mb-2">
                     Nombre <span className="text-red-500">*</span>
@@ -203,24 +203,23 @@ export default function NuevaSolicitudPage() {
 
             {/* Información de Ubicación */}
             <div>
-              <h2 className="text-xl font-bold text-neutral mb-4 pb-2 border-b-2 border-accent">
+              <h2 className="text-base sm:text-xl font-bold text-neutral mb-3 sm:mb-4 pb-2 border-b-2 border-accent">
                 Información de Ubicación
               </h2>
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4 sm:space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                   <div>
                     <label
                       htmlFor="barrio"
                       className="block text-sm font-semibold text-neutral mb-2"
                     >
-                      Barrio <span className="text-red-500">*</span>
+                      Barrio <span className="text-gray-500 text-xs">(Opcional)</span>
                     </label>
                     <select
                       id="barrio"
                       name="barrio"
                       value={formData.barrio}
                       onChange={handleChange}
-                      required
                       className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all bg-white"
                     >
                       <option value="">Seleccione un barrio</option>
@@ -274,7 +273,7 @@ export default function NuevaSolicitudPage() {
 
             {/* Notas Adicionales */}
             <div>
-              <h2 className="text-xl font-bold text-neutral mb-4 pb-2 border-b-2 border-secondary">
+              <h2 className="text-base sm:text-xl font-bold text-neutral mb-3 sm:mb-4 pb-2 border-b-2 border-secondary">
                 Información Adicional
               </h2>
               <div>
@@ -301,18 +300,18 @@ export default function NuevaSolicitudPage() {
             )}
 
             {/* Buttons */}
-            <div className="flex gap-4 pt-4">
+            <div className="flex flex-col-reverse sm:flex-row gap-3 sm:gap-4 pt-3 sm:pt-4">
               <button
                 type="button"
                 onClick={() => router.back()}
-                className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex-1 px-6 py-2.5 sm:py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors text-sm sm:text-base"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={loading}
-                className="flex-1 px-6 py-3 bg-primary text-white font-semibold rounded-lg hover:bg-neutral transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-6 py-2.5 sm:py-3 bg-primary text-white font-semibold rounded-lg hover:bg-neutral transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base active:scale-[0.98]"
               >
                 {loading ? (
                   <span className="flex items-center justify-center gap-2">

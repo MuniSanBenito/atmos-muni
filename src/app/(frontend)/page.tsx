@@ -75,35 +75,38 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-neutral">Municipalidad de San Benito</h1>
-            <p className="text-sm text-gray-600">Sistema de Gestión Atmosférica</p>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-sm font-medium text-neutral">{user.email}</p>
-              <p className="text-xs text-gray-500 capitalize">{user.role}</p>
+      <header className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-lg sm:text-2xl font-bold text-neutral truncate">Municipalidad de San Benito</h1>
+              <p className="text-xs sm:text-sm text-gray-600">Sistema de Gestión Atmosférica</p>
             </div>
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 bg-neutral text-white rounded-lg hover:bg-primary transition-colors"
-            >
-              Cerrar Sesión
-            </button>
+            <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+              <div className="text-right hidden sm:block">
+                <p className="text-sm font-medium text-neutral">{user.email}</p>
+                <p className="text-xs text-gray-500 capitalize">{user.role}</p>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="px-3 sm:px-4 py-2 bg-neutral text-white rounded-lg hover:bg-primary transition-colors text-sm sm:text-base whitespace-nowrap"
+              >
+                <span className="sm:hidden">Salir</span>
+                <span className="hidden sm:inline">Cerrar Sesión</span>
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Welcome Section */}
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold text-neutral mb-2">
+        <div className="mb-6 sm:mb-8">
+          <h2 className="text-xl sm:text-3xl font-bold text-neutral mb-1 sm:mb-2">
             Bienvenido, {user.email.split('@')[0]}
           </h2>
-          <p className="text-gray-600">Selecciona una opción para continuar</p>
+          <p className="text-sm sm:text-base text-gray-600">Selecciona una opción para continuar</p>
         </div>
 
         {/* Dashboard Cards */}
@@ -177,7 +180,7 @@ export default function HomePage() {
         </div>
 
         {/* Stats Section */}
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        <div className="mt-6 sm:mt-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
           <div className="bg-white rounded-xl shadow p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -284,7 +287,7 @@ export default function HomePage() {
         </div>
 
         {/* Stats Adicionales */}
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="mt-4 sm:mt-6 grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
           <div className="bg-white rounded-xl shadow p-6">
             <div className="flex items-center justify-between">
               <div>

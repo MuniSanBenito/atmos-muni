@@ -121,35 +121,38 @@ export default function SolicitudesPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-neutral">Solicitudes Atmosféricas</h1>
-            <p className="text-sm text-gray-600">Gestiona todas las solicitudes del sistema</p>
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => router.push('/')}
-              className="px-4 py-2 text-neutral border-2 border-neutral rounded-lg hover:bg-neutral hover:text-white transition-colors"
-            >
-              Volver al Inicio
-            </button>
-            <button
-              onClick={() => router.push('/solicitudes/nueva')}
-              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-neutral transition-colors font-semibold"
-            >
-              + Nueva Solicitud
-            </button>
+      <header className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h1 className="text-lg sm:text-2xl font-bold text-neutral">Solicitudes Atmosféricas</h1>
+              <p className="text-xs sm:text-sm text-gray-600">Gestiona todas las solicitudes del sistema</p>
+            </div>
+            <div className="flex gap-2 sm:gap-3">
+              <button
+                onClick={() => router.push('/')}
+                className="flex-1 sm:flex-none px-3 sm:px-4 py-2 text-neutral border-2 border-neutral rounded-lg hover:bg-neutral hover:text-white transition-colors text-sm"
+              >
+                <span className="sm:hidden">Inicio</span>
+                <span className="hidden sm:inline">Volver al Inicio</span>
+              </button>
+              <button
+                onClick={() => router.push('/solicitudes/nueva')}
+                className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-primary text-white rounded-lg hover:bg-neutral transition-colors font-semibold text-sm"
+              >
+                + Nueva
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Filtros */}
-        <div className="bg-white rounded-xl shadow p-6 mb-6">
-          <h2 className="text-lg font-bold text-neutral mb-4">Filtrar por Estado</h2>
-          <div className="flex flex-wrap gap-3">
+        <div className="bg-white rounded-xl shadow p-4 sm:p-6 mb-4 sm:mb-6">
+          <h2 className="text-base sm:text-lg font-bold text-neutral mb-3 sm:mb-4">Filtrar por Estado</h2>
+          <div className="flex flex-wrap gap-2 sm:gap-3">
             <button
               onClick={() => setFiltroEstado('todas')}
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${

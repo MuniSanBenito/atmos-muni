@@ -238,40 +238,43 @@ export default function ServicioPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-neutral">Panel del Chofer</h1>
-            <p className="text-sm text-gray-600">Servicios Atmosféricos Asignados</p>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-sm font-medium text-neutral">{user.email}</p>
-              <p className="text-xs text-gray-500 capitalize">Chofer</p>
+      <header className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-lg sm:text-2xl font-bold text-neutral truncate">Panel del Chofer</h1>
+              <p className="text-xs sm:text-sm text-gray-600">Servicios Atmosféricos Asignados</p>
             </div>
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 bg-neutral text-white rounded-lg hover:bg-primary transition-colors"
-            >
-              Cerrar Sesión
-            </button>
+            <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+              <div className="text-right hidden sm:block">
+                <p className="text-sm font-medium text-neutral">{user.email}</p>
+                <p className="text-xs text-gray-500 capitalize">Chofer</p>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="px-3 sm:px-4 py-2 bg-neutral text-white rounded-lg hover:bg-primary transition-colors text-sm sm:text-base whitespace-nowrap"
+              >
+                <span className="sm:hidden">Salir</span>
+                <span className="hidden sm:inline">Cerrar Sesión</span>
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-xl shadow p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Total Servicios</p>
-                <p className="text-3xl font-bold text-neutral">{solicitudes.length}</p>
+        <div className="grid grid-cols-3 gap-2 sm:gap-6 mb-6 sm:mb-8">
+          <div className="bg-white rounded-xl shadow p-3 sm:p-6">
+            <div className="flex flex-col sm:flex-row items-center sm:justify-between gap-2">
+              <div className="text-center sm:text-left">
+                <p className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1">Total</p>
+                <p className="text-xl sm:text-3xl font-bold text-neutral">{solicitudes.length}</p>
               </div>
-              <div className="bg-primary/10 p-3 rounded-lg">
+              <div className="bg-primary/10 p-2 sm:p-3 rounded-lg hidden sm:block">
                 <svg
-                  className="w-8 h-8 text-primary"
+                  className="w-6 sm:w-8 h-6 sm:h-8 text-primary"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -287,17 +290,17 @@ export default function ServicioPage() {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Pendientes</p>
-                <p className="text-3xl font-bold text-secondary">
+          <div className="bg-white rounded-xl shadow p-3 sm:p-6">
+            <div className="flex flex-col sm:flex-row items-center sm:justify-between gap-2">
+              <div className="text-center sm:text-left">
+                <p className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1">Pendientes</p>
+                <p className="text-xl sm:text-3xl font-bold text-secondary">
                   {solicitudes.filter((s) => s.estado === 'pendiente').length}
                 </p>
               </div>
-              <div className="bg-secondary/10 p-3 rounded-lg">
+              <div className="bg-secondary/10 p-2 sm:p-3 rounded-lg hidden sm:block">
                 <svg
-                  className="w-8 h-8 text-secondary"
+                  className="w-6 sm:w-8 h-6 sm:h-8 text-secondary"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -313,17 +316,17 @@ export default function ServicioPage() {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 mb-1">En Camino</p>
-                <p className="text-3xl font-bold text-accent">
+          <div className="bg-white rounded-xl shadow p-3 sm:p-6">
+            <div className="flex flex-col sm:flex-row items-center sm:justify-between gap-2">
+              <div className="text-center sm:text-left">
+                <p className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1">En Camino</p>
+                <p className="text-xl sm:text-3xl font-bold text-accent">
                   {solicitudes.filter((s) => s.estado === 'en_camino').length}
                 </p>
               </div>
-              <div className="bg-accent/10 p-3 rounded-lg">
+              <div className="bg-accent/10 p-2 sm:p-3 rounded-lg hidden sm:block">
                 <svg
-                  className="w-8 h-8 text-accent"
+                  className="w-6 sm:w-8 h-6 sm:h-8 text-accent"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
