@@ -83,3 +83,51 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Error al obtener las solicitudes' }, { status: 500 })
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  // Solo admin puede eliminar solicitudes
+  const auth = await checkAuth(request, ['admin'])
+  if (auth.error) return auth.error
+
+  try {
+    const { searchParams } = new URL(request.url)
+    const payload = await getPayload({ config })
+
+    // Obtener IDs desde query params (formato: where[and][0][id][in][0]=id1&...)
+    const idsToDelete: string[] = []
+    
+    // Parsear los query params para extraer los IDs
+    searchParams.forEach((value, key) => {
+      if (key.includes('[id][in]') || key.includes('[id][equals]')) {
+        idsToDelete.push(value)
+      }
+    })
+
+    if (idsToDelete.length === 0) {
+      return NextResponse.json({ error: 'No se especificaron IDs para eliminar' }, { status: 400 })
+    }
+
+    // Eliminar cada solicitud
+    const deletedIds: string[] = []
+    for (const id of idsToDelete) {
+      try {
+        await payload.delete({
+          collection: 'solicitudes',
+          id,
+        })
+        deletedIds.push(id)
+      } catch (err) {
+        console.error(`Error al eliminar solicitud ${id}:`, err)
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `${deletedIds.length} solicitud(es) eliminada(s)`,
+      deletedIds,
+    })
+  } catch (error) {
+    console.error('Error al eliminar solicitudes:', error)
+    return NextResponse.json({ error: 'Error al eliminar las solicitudes' }, { status: 500 })
+  }
+}

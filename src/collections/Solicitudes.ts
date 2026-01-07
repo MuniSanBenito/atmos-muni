@@ -68,10 +68,10 @@ export const Solicitudes: CollectionConfig = {
       name: 'barrio',
       type: 'relationship',
       relationTo: 'barrios',
-      required: true,
+      required: false,
       label: 'Barrio',
       admin: {
-        description: 'Seleccione el barrio de San Benito',
+        description: 'Seleccione el barrio de San Benito (opcional)',
       },
     },
     {
