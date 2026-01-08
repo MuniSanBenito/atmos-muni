@@ -176,9 +176,9 @@ export interface Solicitude {
   telefono: string;
   direccion: string;
   /**
-   * Seleccione el barrio de San Benito
+   * Seleccione el barrio de San Benito (opcional)
    */
-  barrio: string | Barrio;
+  barrio?: (string | null) | Barrio;
   tipoPago: 'subsidiado' | 'pagado';
   /**
    * Formato: Latitud, Longitud (Ej: -26.123456, -54.654321)

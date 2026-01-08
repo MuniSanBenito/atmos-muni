@@ -110,7 +110,7 @@ export default function HomePage() {
         </div>
 
         {/* Dashboard Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Ver Solicitudes Card */}
           <div className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-shadow p-8 border-t-4 border-primary">
             <div className="flex items-start gap-4">
@@ -173,6 +173,39 @@ export default function HomePage() {
                   className="w-full bg-accent text-white font-semibold py-3 rounded-lg hover:bg-neutral transition-colors"
                 >
                   Crear Solicitud
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Reportes Card */}
+          <div className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-shadow p-8 border-t-4 border-secondary md:col-span-2 lg:col-span-1">
+            <div className="flex items-start gap-4">
+              <div className="bg-secondary/10 p-4 rounded-lg">
+                <svg
+                  className="w-8 h-8 text-secondary"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                  />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-neutral mb-2">Reportes</h3>
+                <p className="text-gray-600 mb-4">
+                  Genera reportes detallados por día, semana, mes o año con exportación a Excel
+                </p>
+                <button
+                  onClick={() => router.push('/reportes')}
+                  className="w-full bg-secondary text-white font-semibold py-3 rounded-lg hover:bg-neutral transition-colors"
+                >
+                  Ver Reportes
                 </button>
               </div>
             </div>
