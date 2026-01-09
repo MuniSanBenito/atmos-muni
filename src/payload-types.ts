@@ -185,6 +185,10 @@ export interface Solicitude {
    */
   coordenadas?: string | null;
   notas?: string | null;
+  /**
+   * Fecha programada para el servicio
+   */
+  fechaSolicitud: string;
   estado: 'pendiente' | 'en_camino' | 'realizada' | 'no_realizada';
   fechaRealizacion?: string | null;
   motivoNoRealizacion?: string | null;
@@ -342,6 +346,7 @@ export interface SolicitudesSelect<T extends boolean = true> {
   tipoPago?: T;
   coordenadas?: T;
   notas?: T;
+  fechaSolicitud?: T;
   estado?: T;
   fechaRealizacion?: T;
   motivoNoRealizacion?: T;

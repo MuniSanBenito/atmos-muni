@@ -99,6 +99,15 @@ export const Solicitudes: CollectionConfig = {
       label: 'Notas Adicionales',
     },
     {
+      name: 'fechaSolicitud',
+      type: 'date',
+      required: true,
+      label: 'Fecha de Solicitud',
+      admin: {
+        description: 'Fecha programada para el servicio',
+      },
+    },
+    {
       name: 'estado',
       type: 'select',
       required: true,

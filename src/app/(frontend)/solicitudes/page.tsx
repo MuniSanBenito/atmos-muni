@@ -15,6 +15,7 @@ interface Solicitud {
   coordenadas?: string
   notas?: string
   estado: 'pendiente' | 'en_camino' | 'realizada' | 'no_realizada'
+  fechaSolicitud?: string
   createdAt: string
   updatedAt: string
   fechaRealizacion?: string
@@ -303,7 +304,13 @@ export default function SolicitudesPage() {
                               d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
                             />
                           </svg>
-                          {formatDate(solicitud.createdAt)}
+                          {solicitud.fechaSolicitud 
+                            ? new Date(solicitud.fechaSolicitud).toLocaleDateString('es-AR', {
+                                day: '2-digit',
+                                month: '2-digit', 
+                                year: 'numeric',
+                              })
+                            : formatDate(solicitud.createdAt)}
                         </div>
                       </div>
                     </div>
@@ -405,9 +412,33 @@ export default function SolicitudesPage() {
                   {selectedSolicitud.coordenadas && (
                     <div>
                       <p className="text-xs text-gray-500 mb-1">Coordenadas GPS</p>
-                      <p className="font-medium text-neutral font-mono text-sm">
-                        {selectedSolicitud.coordenadas}
+                      <p className="font-medium text-neutral font-mono text-sm mb-3">
+                        📍 {selectedSolicitud.coordenadas}
                       </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${selectedSolicitud.coordenadas.replace(/\s/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-neutral transition-colors font-medium text-sm flex items-center justify-center gap-2"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                          Ver en Maps
+                        </a>
+                        <a
+                          href={`https://www.google.com/maps/dir/?api=1&destination=${selectedSolicitud.coordenadas.replace(/\s/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-blue-600 transition-colors font-medium text-sm flex items-center justify-center gap-2"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                          </svg>
+                          Navegar
+                        </a>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -422,6 +453,27 @@ export default function SolicitudesPage() {
                   </div>
                 </div>
               )}
+
+              {/* Fecha de Solicitud */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-500 mb-2">Fecha de Solicitud</h3>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <p className="text-blue-700 font-medium">
+                      {selectedSolicitud.fechaSolicitud 
+                        ? new Date(selectedSolicitud.fechaSolicitud).toLocaleDateString('es-AR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                          })
+                        : 'No especificada'}
+                    </p>
+                  </div>
+                </div>
+              </div>
 
               {/* Fecha de Realización */}
               {selectedSolicitud.fechaRealizacion && (

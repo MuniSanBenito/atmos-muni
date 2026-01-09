@@ -26,6 +26,7 @@ export default function NuevaSolicitudPage() {
     tipoPago: 'subsidiado',
     coordenadas: '',
     notas: '',
+    fechaSolicitud: new Date().toISOString().split('T')[0],
   })
 
   useEffect(() => {
@@ -197,6 +198,24 @@ export default function NuevaSolicitudPage() {
                     <option value="subsidiado">Subsidiado</option>
                     <option value="pagado">Pagado</option>
                   </select>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="fechaSolicitud"
+                    className="block text-sm font-semibold text-neutral mb-2"
+                  >
+                    Fecha de Solicitud <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="fechaSolicitud"
+                    name="fechaSolicitud"
+                    type="date"
+                    value={formData.fechaSolicitud}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all"
+                  />
                 </div>
               </div>
             </div>

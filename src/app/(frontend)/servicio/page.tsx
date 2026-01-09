@@ -21,6 +21,7 @@ interface Solicitud {
   coordenadas?: string
   notas?: string
   estado: 'pendiente' | 'en_camino' | 'realizada' | 'no_realizada'
+  fechaSolicitud?: string
   createdAt: string
 }
 
@@ -660,7 +661,15 @@ export default function ServicioPage() {
 
               <div>
                 <h3 className="text-sm font-semibold text-gray-500 mb-2">Fecha de Solicitud</h3>
-                <p className="text-neutral">{formatDate(selectedSolicitud.createdAt)}</p>
+                <p className="text-neutral">
+                  {selectedSolicitud.fechaSolicitud 
+                    ? new Date(selectedSolicitud.fechaSolicitud).toLocaleDateString('es-AR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                      })
+                    : 'No especificada'}
+                </p>
               </div>
 
               {/* Acciones de Cambio de Estado */}

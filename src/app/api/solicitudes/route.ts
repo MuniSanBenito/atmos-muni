@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
         tipoPago: data.tipoPago,
         coordenadas: data.coordenadas || '',
         notas: data.notas || '',
+        fechaSolicitud: data.fechaSolicitud,
         estado: 'pendiente',
       },
     })
@@ -68,7 +69,7 @@ export async function GET(request: NextRequest) {
 
     const solicitudes = await payload.find({
       collection: 'solicitudes',
-      sort: '-createdAt',
+      sort: 'fechaSolicitud',
       where,
       limit: 100, // Limitar resultados
     })
