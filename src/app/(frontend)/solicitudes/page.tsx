@@ -29,6 +29,8 @@ export default function SolicitudesPage() {
   const [loading, setLoading] = useState(true)
   const [selectedSolicitud, setSelectedSolicitud] = useState<Solicitud | null>(null)
   const [filtroEstado, setFiltroEstado] = useState<string>('todas')
+  const [busqueda, setBusqueda] = useState<string>('')
+  const [filtroFecha, setFiltroFecha] = useState<string>('')
 
   useEffect(() => {
     if (!authLoading) {
@@ -104,8 +106,58 @@ export default function SolicitudesPage() {
     })
   }
 
-  const solicitudesFiltradas =
-    filtroEstado === 'todas' ? solicitudes : solicitudes.filter((s) => s.estado === filtroEstado)
+  // Función para normalizar texto (quitar acentos y convertir a minúsculas)
+  const normalizarTexto = (texto: string) => {
+    return texto
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+  }
+
+  // Filtrar por estado, búsqueda y fecha
+  const solicitudesFiltradas = solicitudes.filter((s) => {
+    // Filtro por estado
+    if (filtroEstado !== 'todas' && s.estado !== filtroEstado) {
+      return false
+    }
+
+    // Filtro por búsqueda de texto
+    if (busqueda.trim()) {
+      const terminoBusqueda = normalizarTexto(busqueda.trim())
+      const camposBusqueda = [
+        s.nombre,
+        s.apellido,
+        s.direccion,
+        s.telefono,
+        s.barrio?.nombre || '',
+        s.notas || '',
+        s.tipoPago,
+      ]
+      const textoCompleto = normalizarTexto(camposBusqueda.join(' '))
+      if (!textoCompleto.includes(terminoBusqueda)) {
+        return false
+      }
+    }
+
+    // Filtro por fecha
+    if (filtroFecha) {
+      const fechaSolicitud = s.fechaSolicitud 
+        ? new Date(s.fechaSolicitud).toISOString().split('T')[0]
+        : new Date(s.createdAt).toISOString().split('T')[0]
+      if (fechaSolicitud !== filtroFecha) {
+        return false
+      }
+    }
+
+    return true
+  })
+
+  // Limpiar todos los filtros
+  const limpiarFiltros = () => {
+    setFiltroEstado('todas')
+    setBusqueda('')
+    setFiltroFecha('')
+  }
 
   if (!user) {
     return null
@@ -150,60 +202,150 @@ export default function SolicitudesPage() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        {/* Filtros */}
-        <div className="bg-white rounded-xl shadow p-4 sm:p-6 mb-4 sm:mb-6">
-          <h2 className="text-base sm:text-lg font-bold text-neutral mb-3 sm:mb-4">Filtrar por Estado</h2>
-          <div className="flex flex-wrap gap-2 sm:gap-3">
-            <button
-              onClick={() => setFiltroEstado('todas')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                filtroEstado === 'todas'
-                  ? 'bg-neutral text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Todas ({solicitudes.length})
-            </button>
-            <button
-              onClick={() => setFiltroEstado('pendiente')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                filtroEstado === 'pendiente'
-                  ? 'bg-yellow-500 text-white'
-                  : 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
-              }`}
-            >
-              Pendientes ({solicitudes.filter((s) => s.estado === 'pendiente').length})
-            </button>
-            <button
-              onClick={() => setFiltroEstado('en_camino')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                filtroEstado === 'en_camino'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
-              }`}
-            >
-              En Camino ({solicitudes.filter((s) => s.estado === 'en_camino').length})
-            </button>
-            <button
-              onClick={() => setFiltroEstado('realizada')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                filtroEstado === 'realizada'
-                  ? 'bg-green-500 text-white'
-                  : 'bg-green-100 text-green-800 hover:bg-green-200'
-              }`}
-            >
-              Realizadas ({solicitudes.filter((s) => s.estado === 'realizada').length})
-            </button>
-            <button
-              onClick={() => setFiltroEstado('no_realizada')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                filtroEstado === 'no_realizada'
-                  ? 'bg-red-500 text-white'
-                  : 'bg-red-100 text-red-800 hover:bg-red-200'
-              }`}
-            >
-              No Realizadas ({solicitudes.filter((s) => s.estado === 'no_realizada').length})
-            </button>
+        {/* Buscador y Filtros */}
+        <div className="bg-white rounded-xl shadow p-4 sm:p-6 mb-4 sm:mb-6 space-y-4">
+          {/* Buscador */}
+          <div>
+            <label className="text-base sm:text-lg font-bold text-neutral block mb-3">
+              🔍 Buscar
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                placeholder="Buscar por nombre, apellido, dirección, barrio, teléfono..."
+                className="w-full px-4 py-3 pr-10 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition-colors text-sm sm:text-base"
+              />
+              {busqueda && (
+                <button
+                  onClick={() => setBusqueda('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Filtro por Fecha */}
+          <div>
+            <label className="text-base sm:text-lg font-bold text-neutral block mb-3">
+              📅 Filtrar por Día
+            </label>
+            <div className="flex flex-wrap gap-2 items-center">
+              <input
+                type="date"
+                value={filtroFecha}
+                onChange={(e) => setFiltroFecha(e.target.value)}
+                className="px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition-colors text-sm sm:text-base"
+              />
+              {filtroFecha && (
+                <button
+                  onClick={() => setFiltroFecha('')}
+                  className="px-3 py-2 text-sm bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  ✕ Quitar filtro de fecha
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Filtro por Estado */}
+          <div>
+            <label className="text-base sm:text-lg font-bold text-neutral block mb-3">
+              📋 Filtrar por Estado
+            </label>
+            <div className="flex flex-wrap gap-2 sm:gap-3">
+              <button
+                onClick={() => setFiltroEstado('todas')}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  filtroEstado === 'todas'
+                    ? 'bg-neutral text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Todas ({solicitudes.length})
+              </button>
+              <button
+                onClick={() => setFiltroEstado('pendiente')}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  filtroEstado === 'pendiente'
+                    ? 'bg-yellow-500 text-white'
+                    : 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+                }`}
+              >
+                Pendientes ({solicitudes.filter((s) => s.estado === 'pendiente').length})
+              </button>
+              <button
+                onClick={() => setFiltroEstado('en_camino')}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  filtroEstado === 'en_camino'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                }`}
+              >
+                En Camino ({solicitudes.filter((s) => s.estado === 'en_camino').length})
+              </button>
+              <button
+                onClick={() => setFiltroEstado('realizada')}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  filtroEstado === 'realizada'
+                    ? 'bg-green-500 text-white'
+                    : 'bg-green-100 text-green-800 hover:bg-green-200'
+                }`}
+              >
+                Realizadas ({solicitudes.filter((s) => s.estado === 'realizada').length})
+              </button>
+              <button
+                onClick={() => setFiltroEstado('no_realizada')}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  filtroEstado === 'no_realizada'
+                    ? 'bg-red-500 text-white'
+                    : 'bg-red-100 text-red-800 hover:bg-red-200'
+                }`}
+              >
+                No Realizadas ({solicitudes.filter((s) => s.estado === 'no_realizada').length})
+              </button>
+            </div>
+          </div>
+
+          {/* Resumen de filtros activos y botón limpiar */}
+          {(busqueda || filtroFecha || filtroEstado !== 'todas') && (
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-gray-200">
+              <div className="flex flex-wrap gap-2 items-center text-sm text-gray-600">
+                <span className="font-medium">Filtros activos:</span>
+                {busqueda && (
+                  <span className="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs">
+                    Búsqueda: "{busqueda}"
+                  </span>
+                )}
+                {filtroFecha && (
+                  <span className="px-2 py-1 bg-accent/10 text-accent rounded-full text-xs">
+                    Fecha: {new Date(filtroFecha + 'T12:00:00').toLocaleDateString('es-AR')}
+                  </span>
+                )}
+                {filtroEstado !== 'todas' && (
+                  <span className="px-2 py-1 bg-secondary/10 text-secondary rounded-full text-xs capitalize">
+                    Estado: {filtroEstado.replace('_', ' ')}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={limpiarFiltros}
+                className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors font-medium text-sm"
+              >
+                🗑️ Limpiar todos los filtros
+              </button>
+            </div>
+          )}
+
+          {/* Contador de resultados */}
+          <div className="text-sm text-gray-500 pt-2">
+            Mostrando <span className="font-bold text-neutral">{solicitudesFiltradas.length}</span> de{' '}
+            <span className="font-bold text-neutral">{solicitudes.length}</span> solicitudes
           </div>
         </div>
 
