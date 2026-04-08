@@ -31,6 +31,8 @@ export default function SolicitudesPage() {
   const [filtroEstado, setFiltroEstado] = useState<string>('todas')
   const [busqueda, setBusqueda] = useState<string>('')
   const [filtroFecha, setFiltroFecha] = useState<string>('')
+  const [ordenCampo, setOrdenCampo] = useState<'fechaSolicitud' | 'createdAt'>('createdAt')
+  const [ordenDir, setOrdenDir] = useState<'asc' | 'desc'>('desc')
 
   useEffect(() => {
     if (!authLoading) {
@@ -114,49 +116,71 @@ export default function SolicitudesPage() {
       .replace(/[\u0300-\u036f]/g, '')
   }
 
+  const estadoLabels: Record<string, string> = {
+    pendiente: 'pendiente',
+    en_camino: 'en camino',
+    realizada: 'realizada',
+    no_realizada: 'no realizada',
+  }
+
   // Filtrar por estado, búsqueda y fecha
-  const solicitudesFiltradas = solicitudes.filter((s) => {
-    // Filtro por estado
-    if (filtroEstado !== 'todas' && s.estado !== filtroEstado) {
-      return false
-    }
+  const solicitudesFiltradas = solicitudes
+    .filter((s) => {
+      if (filtroEstado !== 'todas' && s.estado !== filtroEstado) return false
 
-    // Filtro por búsqueda de texto
-    if (busqueda.trim()) {
-      const terminoBusqueda = normalizarTexto(busqueda.trim())
-      const camposBusqueda = [
-        s.nombre,
-        s.apellido,
-        s.direccion,
-        s.telefono,
-        s.barrio?.nombre || '',
-        s.notas || '',
-        s.tipoPago,
-      ]
-      const textoCompleto = normalizarTexto(camposBusqueda.join(' '))
-      if (!textoCompleto.includes(terminoBusqueda)) {
-        return false
+      if (busqueda.trim()) {
+        const terminoBusqueda = normalizarTexto(busqueda.trim())
+        const camposBusqueda = [
+          s.nombre,
+          s.apellido,
+          s.direccion,
+          s.telefono,
+          s.barrio?.nombre || '',
+          s.notas || '',
+          s.tipoPago === 'pagado' ? 'pagado' : 'subsidiado',
+          estadoLabels[s.estado] || s.estado,
+          s.motivoNoRealizacion || '',
+        ]
+        const textoCompleto = normalizarTexto(camposBusqueda.join(' '))
+        if (!textoCompleto.includes(terminoBusqueda)) return false
       }
-    }
 
-    // Filtro por fecha
-    if (filtroFecha) {
-      const fechaSolicitud = s.fechaSolicitud 
-        ? new Date(s.fechaSolicitud).toISOString().split('T')[0]
-        : new Date(s.createdAt).toISOString().split('T')[0]
-      if (fechaSolicitud !== filtroFecha) {
-        return false
+      if (filtroFecha) {
+        const fechaCreacion = new Date(s.createdAt).toISOString().split('T')[0]
+        const fechaSol = s.fechaSolicitud
+          ? new Date(s.fechaSolicitud).toISOString().split('T')[0]
+          : null
+        if (fechaCreacion !== filtroFecha && fechaSol !== filtroFecha) return false
       }
-    }
 
-    return true
-  })
+      return true
+    })
+    .sort((a, b) => {
+      const getVal = (s: Solicitud) => {
+        if (ordenCampo === 'fechaSolicitud') {
+          return s.fechaSolicitud ? new Date(s.fechaSolicitud).getTime() : new Date(s.createdAt).getTime()
+        }
+        return new Date(s.createdAt).getTime()
+      }
+      return ordenDir === 'desc' ? getVal(b) - getVal(a) : getVal(a) - getVal(b)
+    })
+
+  const toggleOrden = (campo: 'fechaSolicitud' | 'createdAt') => {
+    if (ordenCampo === campo) {
+      setOrdenDir(ordenDir === 'desc' ? 'asc' : 'desc')
+    } else {
+      setOrdenCampo(campo)
+      setOrdenDir('desc')
+    }
+  }
 
   // Limpiar todos los filtros
   const limpiarFiltros = () => {
     setFiltroEstado('todas')
     setBusqueda('')
     setFiltroFecha('')
+    setOrdenCampo('createdAt')
+    setOrdenDir('desc')
   }
 
   if (!user) {
@@ -312,8 +336,43 @@ export default function SolicitudesPage() {
             </div>
           </div>
 
+          {/* Ordenar por */}
+          <div>
+            <label className="text-base sm:text-lg font-bold text-neutral block mb-3">
+              ↕ Ordenar por
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => toggleOrden('createdAt')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors text-sm ${
+                  ordenCampo === 'createdAt'
+                    ? 'bg-neutral text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Fecha de Creación
+                {ordenCampo === 'createdAt' && (
+                  <span>{ordenDir === 'desc' ? '↓' : '↑'}</span>
+                )}
+              </button>
+              <button
+                onClick={() => toggleOrden('fechaSolicitud')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors text-sm ${
+                  ordenCampo === 'fechaSolicitud'
+                    ? 'bg-neutral text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Fecha de Solicitud
+                {ordenCampo === 'fechaSolicitud' && (
+                  <span>{ordenDir === 'desc' ? '↓' : '↑'}</span>
+                )}
+              </button>
+            </div>
+          </div>
+
           {/* Resumen de filtros activos y botón limpiar */}
-          {(busqueda || filtroFecha || filtroEstado !== 'todas') && (
+          {(busqueda || filtroFecha || filtroEstado !== 'todas' || ordenCampo !== 'createdAt' || ordenDir !== 'desc') && (
             <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-gray-200">
               <div className="flex flex-wrap gap-2 items-center text-sm text-gray-600">
                 <span className="font-medium">Filtros activos:</span>
@@ -432,27 +491,25 @@ export default function SolicitudesPage() {
                           )}
                           {solicitud.direccion}
                         </div>
-                        <div className="flex items-center gap-2">
-                          <svg
-                            className="w-4 h-4 text-secondary"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                            />
-                          </svg>
-                          {solicitud.fechaSolicitud 
-                            ? new Date(solicitud.fechaSolicitud).toLocaleDateString('es-AR', {
-                                day: '2-digit',
-                                month: '2-digit', 
-                                year: 'numeric',
-                              })
-                            : formatDate(solicitud.createdAt)}
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                            <svg className="w-4 h-4 text-secondary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span className="text-xs text-gray-500">Solicitud:</span>
+                            <span>
+                              {solicitud.fechaSolicitud
+                                ? new Date(solicitud.fechaSolicitud).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                                : <span className="text-gray-400 italic">No especificada</span>}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-gray-500">
+                            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span className="text-xs">Creación:</span>
+                            <span className="text-xs">{formatDate(solicitud.createdAt)}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -638,7 +695,7 @@ export default function SolicitudesPage() {
                   <h3 className="text-sm font-semibold text-gray-500 mb-2">Motivo de No Realización</h3>
                   <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                     <div className="flex items-start gap-3">
-                      <svg className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5 text-red-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                       </svg>
                       <p className="text-red-700">{selectedSolicitud.motivoNoRealizacion}</p>

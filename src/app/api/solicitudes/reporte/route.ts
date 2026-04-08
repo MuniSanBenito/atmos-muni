@@ -119,6 +119,7 @@ export async function GET(request: NextRequest) {
           notas: s.notas || '',
           motivoNoRealizacion: s.motivoNoRealizacion || '',
           fechaRealizacion: s.fechaRealizacion || '',
+          fechaSolicitud: s.fechaSolicitud || '',
           createdAt: s.createdAt,
           updatedAt: s.updatedAt,
         })),
