@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../../../context/AuthContext'
+import { fetchAuth } from '../../../lib/fetchAuth'
 
 interface Barrio {
   id: string
@@ -77,14 +78,12 @@ export default function ServicioPage() {
 
   const fetchSolicitudes = async () => {
     try {
-      // Usar el filtro de activas para solo traer pendientes y en_camino
-      let url = '/api/solicitudes?activas=true'
+      // limit=100: mostrar todas las activas sin paginación (no habrá >100 simultáneas)
+      let url = '/api/solicitudes?activas=true&limit=100'
       if (filtroBarrio) {
         url += `&barrio=${filtroBarrio}`
       }
-      const response = await fetch(url, {
-        credentials: 'include',
-      })
+      const response = await fetchAuth(url)
       const data = await response.json()
       if (data.success) {
         setSolicitudes(data.solicitudes)
@@ -130,20 +129,22 @@ export default function ServicioPage() {
   const cambiarEstado = async (solicitudId: string, nuevoEstado: string) => {
     setUpdatingState(true)
     try {
-      const response = await fetch(`/api/solicitudes/${solicitudId}`, {
+      const response = await fetchAuth(`/api/solicitudes/${solicitudId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ estado: nuevoEstado }),
-        credentials: 'include',
       })
 
       if (response.ok) {
         await fetchSolicitudes()
         setSelectedSolicitud(null)
+      } else {
+        const err = await response.json().catch(() => ({}))
+        alert(err?.error || 'Error al cambiar el estado. Intentá de nuevo.')
       }
     } catch (error) {
       console.error('Error al cambiar estado:', error)
-      alert('Error al cambiar el estado')
+      alert('Error de conexión. Verificá tu internet e intentá de nuevo.')
     } finally {
       setUpdatingState(false)
     }
@@ -194,11 +195,15 @@ export default function ServicioPage() {
         dataToUpdate.motivoNoRealizacion = notaFinal
       }
 
-      const response = await fetch(`/api/solicitudes/${selectedSolicitud.id}`, {
+      // Si es realizada, guardar observaciones opcionales
+      if (estadoFinal === 'realizada' && notaFinal) {
+        dataToUpdate.notas = notaFinal
+      }
+
+      const response = await fetchAuth(`/api/solicitudes/${selectedSolicitud.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dataToUpdate),
-        credentials: 'include',
       })
 
       if (response.ok) {
@@ -208,10 +213,13 @@ export default function ServicioPage() {
         setNotaFinal('')
         setCoordenadasCapturadas('')
         setEstadoFinal('realizada')
+      } else {
+        const err = await response.json().catch(() => ({}))
+        alert(err?.error || 'No se pudo guardar el servicio. Intentá de nuevo.')
       }
     } catch (error) {
       console.error('Error al finalizar servicio:', error)
-      alert('Error al finalizar el servicio')
+      alert('Error de conexión. Verificá tu internet e intentá de nuevo.')
     } finally {
       setUpdatingState(false)
     }

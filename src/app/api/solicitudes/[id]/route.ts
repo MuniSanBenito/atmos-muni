@@ -4,7 +4,7 @@ import config from '@payload-config'
 import { checkAuth } from '../../lib/auth'
 
 // Campos que el chofer puede actualizar
-const DRIVER_ALLOWED_FIELDS = ['estado', 'coordenadas', 'fechaRealizacion', 'motivoNoRealizacion']
+const DRIVER_ALLOWED_FIELDS = ['estado', 'coordenadas', 'fechaRealizacion', 'motivoNoRealizacion', 'notas']
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   // Todos los usuarios autenticados pueden actualizar (con restricciones)
