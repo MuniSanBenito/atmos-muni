@@ -52,6 +52,18 @@ export async function GET(request: NextRequest) {
     const soloActivas = searchParams.get('activas') === 'true'
     const barrioId = searchParams.get('barrio')
 
+    // Paginación
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '25', 10)))
+
+    // Sorting
+    const sortField = searchParams.get('sort') || 'createdAt'
+    const sortDir = searchParams.get('sortDir') || 'desc'
+    const sortParam = sortDir === 'desc' ? `-${sortField}` : sortField
+
+    // Búsqueda por texto
+    const busqueda = searchParams.get('q')?.trim()
+
     // Construir query
     let where: any = {}
 
@@ -67,17 +79,33 @@ export async function GET(request: NextRequest) {
       where.barrio = { equals: barrioId }
     }
 
+    // Búsqueda de texto en nombre, apellido, telefono, direccion
+    if (busqueda) {
+      where.or = [
+        { nombre: { contains: busqueda } },
+        { apellido: { contains: busqueda } },
+        { telefono: { contains: busqueda } },
+        { direccion: { contains: busqueda } },
+      ]
+    }
+
     const solicitudes = await payload.find({
       collection: 'solicitudes',
-      sort: 'fechaSolicitud',
+      sort: sortParam,
       where,
-      limit: 100, // Limitar resultados
+      page,
+      limit,
     })
 
     return NextResponse.json({
       success: true,
       solicitudes: solicitudes.docs,
       totalDocs: solicitudes.totalDocs,
+      totalPages: solicitudes.totalPages,
+      page: solicitudes.page,
+      limit,
+      hasPrevPage: solicitudes.hasPrevPage,
+      hasNextPage: solicitudes.hasNextPage,
     })
   } catch (error) {
     console.error('Error al obtener solicitudes:', error)

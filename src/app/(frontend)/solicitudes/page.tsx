@@ -1,8 +1,17 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../../../context/AuthContext'
+import { fetchAuth } from '../../../lib/fetchAuth'
+import {
+  useReactTable,
+  getCoreRowModel,
+  flexRender,
+  createColumnHelper,
+  SortingState,
+  PaginationState,
+} from '@tanstack/react-table'
 
 interface Solicitud {
   id: string
@@ -22,178 +31,209 @@ interface Solicitud {
   motivoNoRealizacion?: string
 }
 
+const columnHelper = createColumnHelper<Solicitud>()
+
 export default function SolicitudesPage() {
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([])
+  const [totalDocs, setTotalDocs] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
   const [loading, setLoading] = useState(true)
   const [selectedSolicitud, setSelectedSolicitud] = useState<Solicitud | null>(null)
   const [filtroEstado, setFiltroEstado] = useState<string>('todas')
   const [busqueda, setBusqueda] = useState<string>('')
   const [filtroFecha, setFiltroFecha] = useState<string>('')
-  const [ordenCampo, setOrdenCampo] = useState<'fechaSolicitud' | 'createdAt'>('createdAt')
-  const [ordenDir, setOrdenDir] = useState<'asc' | 'desc'>('desc')
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'createdAt', desc: true }])
+  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 25 })
+  const busquedaRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [busquedaDebounced, setBusquedaDebounced] = useState<string>('')
 
-  useEffect(() => {
-    if (!authLoading) {
-      if (!user) {
-        router.replace('/login')
-      } else if (user.role === 'driver') {
-        // Si es chofer, redirigir a su panel
-        router.replace('/servicio')
-      } else {
-        fetchSolicitudes()
-      }
-    }
-  }, [user, authLoading, router])
-
-  const fetchSolicitudes = async () => {
+  const fetchSolicitudes = useCallback(async () => {
+    setLoading(true)
     try {
-      const response = await fetch('/api/solicitudes', {
-        credentials: 'include',
-      })
+      const params = new URLSearchParams()
+      params.set('page', String(pagination.pageIndex + 1))
+      params.set('limit', String(pagination.pageSize))
+      if (sorting[0]) {
+        params.set('sort', sorting[0].id)
+        params.set('sortDir', sorting[0].desc ? 'desc' : 'asc')
+      }
+      if (filtroEstado !== 'todas') params.set('estado', filtroEstado)
+      if (busquedaDebounced) params.set('q', busquedaDebounced)
+
+      const response = await fetchAuth(`/api/solicitudes?${params}`)
       const data = await response.json()
       if (data.success) {
         setSolicitudes(data.solicitudes)
+        setTotalDocs(data.totalDocs)
+        setTotalPages(data.totalPages)
       }
     } catch (error) {
       console.error('Error al cargar solicitudes:', error)
     } finally {
       setLoading(false)
     }
-  }
+  }, [pagination.pageIndex, pagination.pageSize, sorting, filtroEstado, busquedaDebounced])
+
+  useEffect(() => {
+    if (!authLoading) {
+      if (!user) router.replace('/login')
+      else if (user.role === 'driver') router.replace('/servicio')
+      else fetchSolicitudes()
+    }
+  }, [user, authLoading, router, fetchSolicitudes])
+
+  // Debounce búsqueda
+  useEffect(() => {
+    if (busquedaRef.current) clearTimeout(busquedaRef.current)
+    busquedaRef.current = setTimeout(() => {
+      setBusquedaDebounced(busqueda)
+      setPagination((p) => ({ ...p, pageIndex: 0 }))
+    }, 400)
+    return () => {
+      if (busquedaRef.current) clearTimeout(busquedaRef.current)
+    }
+  }, [busqueda])
+
+  // Reset página al cambiar filtros
+  useEffect(() => {
+    setPagination((p) => ({ ...p, pageIndex: 0 }))
+  }, [filtroEstado, filtroFecha])
 
   const getEstadoBadge = (estado: string) => {
-    const badges = {
+    const badges: Record<string, string> = {
       pendiente: 'bg-yellow-100 text-yellow-800 border-yellow-300',
       en_camino: 'bg-blue-100 text-blue-800 border-blue-300',
       realizada: 'bg-green-100 text-green-800 border-green-300',
       no_realizada: 'bg-red-100 text-red-800 border-red-300',
     }
-    const labels = {
+    const labels: Record<string, string> = {
       pendiente: 'Pendiente',
       en_camino: 'En Camino',
       realizada: 'Realizada',
       no_realizada: 'No Realizada',
     }
     return (
-      <span
-        className={`px-3 py-1 rounded-full text-xs font-semibold border ${badges[estado as keyof typeof badges]}`}
-      >
-        {labels[estado as keyof typeof labels]}
+      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${badges[estado] ?? ''}`}>
+        {labels[estado] ?? estado}
       </span>
     )
   }
 
   const getTipoPagoBadge = (tipo: string) => {
     return tipo === 'pagado' ? (
-      <span className="px-2 py-1 rounded text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+      <span className="px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary border border-primary/20">
         Pagado
       </span>
     ) : (
-      <span className="px-2 py-1 rounded text-xs font-medium bg-accent/10 text-accent border border-accent/20">
+      <span className="px-2 py-0.5 rounded text-xs font-medium bg-accent/10 text-accent border border-accent/20">
         Subsidiado
       </span>
     )
   }
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('es-AR', {
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString('es-AR', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
     })
+
+  const formatDateShort = (dateString?: string) => {
+    if (!dateString) return <span className="text-gray-400 italic text-xs">—</span>
+    return new Date(dateString).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
   }
 
-  // Función para normalizar texto (quitar acentos y convertir a minúsculas)
-  const normalizarTexto = (texto: string) => {
-    return texto
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-  }
-
-  const estadoLabels: Record<string, string> = {
-    pendiente: 'pendiente',
-    en_camino: 'en camino',
-    realizada: 'realizada',
-    no_realizada: 'no realizada',
-  }
-
-  // Filtrar por estado, búsqueda y fecha
-  const solicitudesFiltradas = solicitudes
-    .filter((s) => {
-      if (filtroEstado !== 'todas' && s.estado !== filtroEstado) return false
-
-      if (busqueda.trim()) {
-        const terminoBusqueda = normalizarTexto(busqueda.trim())
-        const camposBusqueda = [
-          s.nombre,
-          s.apellido,
-          s.direccion,
-          s.telefono,
-          s.barrio?.nombre || '',
-          s.notas || '',
-          s.tipoPago === 'pagado' ? 'pagado' : 'subsidiado',
-          estadoLabels[s.estado] || s.estado,
-          s.motivoNoRealizacion || '',
-        ]
-        const textoCompleto = normalizarTexto(camposBusqueda.join(' '))
-        if (!textoCompleto.includes(terminoBusqueda)) return false
-      }
-
-      if (filtroFecha) {
-        const fechaCreacion = new Date(s.createdAt).toISOString().split('T')[0]
-        const fechaSol = s.fechaSolicitud
-          ? new Date(s.fechaSolicitud).toISOString().split('T')[0]
-          : null
-        if (fechaCreacion !== filtroFecha && fechaSol !== filtroFecha) return false
-      }
-
-      return true
+  // Filtro local por fecha (sobre los docs de la página actual)
+  const solicitudesFiltradas = useMemo(() => {
+    if (!filtroFecha) return solicitudes
+    return solicitudes.filter((s) => {
+      const fechaCreacion = new Date(s.createdAt).toISOString().split('T')[0]
+      const fechaSol = s.fechaSolicitud ? new Date(s.fechaSolicitud).toISOString().split('T')[0] : null
+      return fechaCreacion === filtroFecha || fechaSol === filtroFecha
     })
-    .sort((a, b) => {
-      const getVal = (s: Solicitud) => {
-        if (ordenCampo === 'fechaSolicitud') {
-          return s.fechaSolicitud ? new Date(s.fechaSolicitud).getTime() : new Date(s.createdAt).getTime()
-        }
-        return new Date(s.createdAt).getTime()
-      }
-      return ordenDir === 'desc' ? getVal(b) - getVal(a) : getVal(a) - getVal(b)
-    })
+  }, [solicitudes, filtroFecha])
 
-  const toggleOrden = (campo: 'fechaSolicitud' | 'createdAt') => {
-    if (ordenCampo === campo) {
-      setOrdenDir(ordenDir === 'desc' ? 'asc' : 'desc')
-    } else {
-      setOrdenCampo(campo)
-      setOrdenDir('desc')
-    }
-  }
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor('createdAt', {
+        header: 'Creación',
+        cell: (info) => <span className="text-xs text-gray-600">{formatDate(info.getValue())}</span>,
+      }),
+      columnHelper.accessor('fechaSolicitud', {
+        header: 'F. Solicitud',
+        enableSorting: true,
+        cell: (info) => <span className="text-xs">{formatDateShort(info.getValue())}</span>,
+      }),
+      columnHelper.display({
+        id: 'nombre',
+        header: 'Nombre',
+        cell: ({ row }) => (
+          <span className="font-semibold text-neutral">
+            {row.original.nombre} {row.original.apellido}
+          </span>
+        ),
+      }),
+      columnHelper.accessor('telefono', {
+        header: 'Teléfono',
+        enableSorting: false,
+        cell: (info) => <span className="text-sm">{info.getValue()}</span>,
+      }),
+      columnHelper.display({
+        id: 'ubicacion',
+        header: 'Dirección',
+        cell: ({ row }) => (
+          <span className="text-sm text-gray-700">
+            {row.original.barrio?.nombre ? (
+              <span className="font-medium text-primary">{row.original.barrio.nombre} — </span>
+            ) : null}
+            {row.original.direccion}
+          </span>
+        ),
+      }),
+      columnHelper.accessor('tipoPago', {
+        header: 'Tipo',
+        enableSorting: false,
+        cell: (info) => getTipoPagoBadge(info.getValue()),
+      }),
+      columnHelper.accessor('estado', {
+        header: 'Estado',
+        enableSorting: false,
+        cell: (info) => getEstadoBadge(info.getValue()),
+      }),
+    ],
+    [],
+  )
 
-  // Limpiar todos los filtros
+  const table = useReactTable({
+    data: solicitudesFiltradas,
+    columns,
+    state: { sorting, pagination },
+    manualSorting: true,
+    manualPagination: true,
+    pageCount: totalPages,
+    onSortingChange: (updater) => {
+      setSorting(updater)
+      setPagination((p) => ({ ...p, pageIndex: 0 }))
+    },
+    onPaginationChange: setPagination,
+    getCoreRowModel: getCoreRowModel(),
+  })
+
   const limpiarFiltros = () => {
     setFiltroEstado('todas')
     setBusqueda('')
     setFiltroFecha('')
-    setOrdenCampo('createdAt')
-    setOrdenDir('desc')
+    setSorting([{ id: 'createdAt', desc: true }])
+    setPagination({ pageIndex: 0, pageSize: 25 })
   }
 
-  if (!user) {
-    return null
-  }
+  const hayFiltros = busqueda || filtroFecha || filtroEstado !== 'todas'
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="text-lg text-neutral">Cargando solicitudes...</div>
-      </div>
-    )
-  }
+  if (!user) return null
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -226,312 +266,233 @@ export default function SolicitudesPage() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        {/* Buscador y Filtros */}
+        {/* Filtros */}
         <div className="bg-white rounded-xl shadow p-4 sm:p-6 mb-4 sm:mb-6 space-y-4">
-          {/* Buscador */}
-          <div>
-            <label className="text-base sm:text-lg font-bold text-neutral block mb-3">
-              🔍 Buscar
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                placeholder="Buscar por nombre, apellido, dirección, barrio, teléfono..."
-                className="w-full px-4 py-3 pr-10 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition-colors text-sm sm:text-base"
-              />
-              {busqueda && (
-                <button
-                  onClick={() => setBusqueda('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
+          {/* Buscador + Fecha */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-bold text-neutral block mb-2">🔍 Buscar</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  placeholder="Nombre, apellido, dirección, teléfono..."
+                  className="w-full px-4 py-2.5 pr-10 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition-colors text-sm"
+                />
+                {busqueda ? (
+                  <button onClick={() => setBusqueda('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                ) : (
+                  <svg className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                )}
+              </div>
             </div>
-          </div>
-
-          {/* Filtro por Fecha */}
-          <div>
-            <label className="text-base sm:text-lg font-bold text-neutral block mb-3">
-              📅 Filtrar por Día
-            </label>
-            <div className="flex flex-wrap gap-2 items-center">
-              <input
-                type="date"
-                value={filtroFecha}
-                onChange={(e) => setFiltroFecha(e.target.value)}
-                className="px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition-colors text-sm sm:text-base"
-              />
-              {filtroFecha && (
-                <button
-                  onClick={() => setFiltroFecha('')}
-                  className="px-3 py-2 text-sm bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  ✕ Quitar filtro de fecha
-                </button>
-              )}
+            <div>
+              <label className="text-sm font-bold text-neutral block mb-2">📅 Filtrar por Día</label>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="date"
+                  value={filtroFecha}
+                  onChange={(e) => setFiltroFecha(e.target.value)}
+                  className="px-4 py-2.5 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition-colors text-sm"
+                />
+                {filtroFecha && (
+                  <button onClick={() => setFiltroFecha('')} className="px-3 py-2 text-sm bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors">✕</button>
+                )}
+              </div>
             </div>
           </div>
 
           {/* Filtro por Estado */}
           <div>
-            <label className="text-base sm:text-lg font-bold text-neutral block mb-3">
-              📋 Filtrar por Estado
-            </label>
-            <div className="flex flex-wrap gap-2 sm:gap-3">
-              <button
-                onClick={() => setFiltroEstado('todas')}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  filtroEstado === 'todas'
-                    ? 'bg-neutral text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Todas ({solicitudes.length})
-              </button>
-              <button
-                onClick={() => setFiltroEstado('pendiente')}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  filtroEstado === 'pendiente'
-                    ? 'bg-yellow-500 text-white'
-                    : 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
-                }`}
-              >
-                Pendientes ({solicitudes.filter((s) => s.estado === 'pendiente').length})
-              </button>
-              <button
-                onClick={() => setFiltroEstado('en_camino')}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  filtroEstado === 'en_camino'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
-                }`}
-              >
-                En Camino ({solicitudes.filter((s) => s.estado === 'en_camino').length})
-              </button>
-              <button
-                onClick={() => setFiltroEstado('realizada')}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  filtroEstado === 'realizada'
-                    ? 'bg-green-500 text-white'
-                    : 'bg-green-100 text-green-800 hover:bg-green-200'
-                }`}
-              >
-                Realizadas ({solicitudes.filter((s) => s.estado === 'realizada').length})
-              </button>
-              <button
-                onClick={() => setFiltroEstado('no_realizada')}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  filtroEstado === 'no_realizada'
-                    ? 'bg-red-500 text-white'
-                    : 'bg-red-100 text-red-800 hover:bg-red-200'
-                }`}
-              >
-                No Realizadas ({solicitudes.filter((s) => s.estado === 'no_realizada').length})
-              </button>
-            </div>
-          </div>
-
-          {/* Ordenar por */}
-          <div>
-            <label className="text-base sm:text-lg font-bold text-neutral block mb-3">
-              ↕ Ordenar por
-            </label>
+            <label className="text-sm font-bold text-neutral block mb-2">📋 Estado</label>
             <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => toggleOrden('createdAt')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors text-sm ${
-                  ordenCampo === 'createdAt'
-                    ? 'bg-neutral text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Fecha de Creación
-                {ordenCampo === 'createdAt' && (
-                  <span>{ordenDir === 'desc' ? '↓' : '↑'}</span>
-                )}
-              </button>
-              <button
-                onClick={() => toggleOrden('fechaSolicitud')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors text-sm ${
-                  ordenCampo === 'fechaSolicitud'
-                    ? 'bg-neutral text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Fecha de Solicitud
-                {ordenCampo === 'fechaSolicitud' && (
-                  <span>{ordenDir === 'desc' ? '↓' : '↑'}</span>
-                )}
-              </button>
+              {[
+                { key: 'todas', label: 'Todas', active: 'bg-neutral text-white', idle: 'bg-gray-100 text-gray-700 hover:bg-gray-200' },
+                { key: 'pendiente', label: 'Pendientes', active: 'bg-yellow-500 text-white', idle: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200' },
+                { key: 'en_camino', label: 'En Camino', active: 'bg-blue-500 text-white', idle: 'bg-blue-100 text-blue-800 hover:bg-blue-200' },
+                { key: 'realizada', label: 'Realizadas', active: 'bg-green-500 text-white', idle: 'bg-green-100 text-green-800 hover:bg-green-200' },
+                { key: 'no_realizada', label: 'No Realizadas', active: 'bg-red-500 text-white', idle: 'bg-red-100 text-red-800 hover:bg-red-200' },
+              ].map(({ key, label, active, idle }) => (
+                <button
+                  key={key}
+                  onClick={() => setFiltroEstado(key)}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-colors text-sm ${filtroEstado === key ? active : idle}`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Resumen de filtros activos y botón limpiar */}
-          {(busqueda || filtroFecha || filtroEstado !== 'todas' || ordenCampo !== 'createdAt' || ordenDir !== 'desc') && (
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-gray-200">
+          {/* Filtros activos + limpiar */}
+          {hayFiltros && (
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-gray-200">
               <div className="flex flex-wrap gap-2 items-center text-sm text-gray-600">
                 <span className="font-medium">Filtros activos:</span>
-                {busqueda && (
-                  <span className="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs">
-                    Búsqueda: "{busqueda}"
-                  </span>
-                )}
-                {filtroFecha && (
-                  <span className="px-2 py-1 bg-accent/10 text-accent rounded-full text-xs">
-                    Fecha: {new Date(filtroFecha + 'T12:00:00').toLocaleDateString('es-AR')}
-                  </span>
-                )}
-                {filtroEstado !== 'todas' && (
-                  <span className="px-2 py-1 bg-secondary/10 text-secondary rounded-full text-xs capitalize">
-                    Estado: {filtroEstado.replace('_', ' ')}
-                  </span>
-                )}
+                {busqueda && <span className="px-2 py-0.5 bg-primary/10 text-primary rounded-full text-xs">Búsqueda: "{busqueda}"</span>}
+                {filtroFecha && <span className="px-2 py-0.5 bg-accent/10 text-accent rounded-full text-xs">Fecha: {new Date(filtroFecha + 'T12:00:00').toLocaleDateString('es-AR')}</span>}
+                {filtroEstado !== 'todas' && <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full text-xs capitalize">{filtroEstado.replace('_', ' ')}</span>}
               </div>
-              <button
-                onClick={limpiarFiltros}
-                className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors font-medium text-sm"
-              >
-                🗑️ Limpiar todos los filtros
+              <button onClick={limpiarFiltros} className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors font-medium text-sm">
+                🗑️ Limpiar filtros
               </button>
             </div>
           )}
-
-          {/* Contador de resultados */}
-          <div className="text-sm text-gray-500 pt-2">
-            Mostrando <span className="font-bold text-neutral">{solicitudesFiltradas.length}</span> de{' '}
-            <span className="font-bold text-neutral">{solicitudes.length}</span> solicitudes
-          </div>
         </div>
 
-        {/* Lista de Solicitudes */}
-        {solicitudesFiltradas.length === 0 ? (
-          <div className="bg-white rounded-xl shadow p-12 text-center">
-            <svg
-              className="w-16 h-16 text-gray-400 mx-auto mb-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-              />
-            </svg>
-            <h3 className="text-xl font-bold text-gray-700 mb-2">No hay solicitudes</h3>
-            <p className="text-gray-500">
-              {filtroEstado === 'todas'
-                ? 'Aún no se han registrado solicitudes en el sistema'
-                : `No hay solicitudes con el estado "${filtroEstado}"`}
+        {/* Tabla */}
+        <div className="bg-white rounded-xl shadow overflow-hidden">
+          {/* Toolbar */}
+          <div className="px-4 sm:px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <p className="text-sm text-gray-600">
+              {loading ? 'Cargando...' : (
+                <>
+                  <span className="font-bold text-neutral">{totalDocs}</span> solicitudes en total
+                  {filtroFecha && solicitudesFiltradas.length !== solicitudes.length && (
+                    <span className="ml-2 text-gray-400">(mostrando {solicitudesFiltradas.length} con ese día)</span>
+                  )}
+                </>
+              )}
             </p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {solicitudesFiltradas.map((solicitud) => (
-              <div
-                key={solicitud.id}
-                className="bg-white rounded-xl shadow hover:shadow-lg transition-shadow cursor-pointer"
-                onClick={() => setSelectedSolicitud(solicitud)}
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <span>Filas por página:</span>
+              <select
+                value={pagination.pageSize}
+                onChange={(e) => setPagination({ pageIndex: 0, pageSize: Number(e.target.value) })}
+                className="px-2 py-1 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
               >
-                <div className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-lg font-bold text-neutral">
-                          {solicitud.nombre} {solicitud.apellido}
-                        </h3>
-                        {getEstadoBadge(solicitud.estado)}
-                        {getTipoPagoBadge(solicitud.tipoPago)}
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
-                        <div className="flex items-center gap-2">
-                          <svg
-                            className="w-4 h-4 text-primary"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
+                {[10, 25, 50, 100].map((size) => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="p-12 text-center text-gray-500">Cargando solicitudes...</div>
+          ) : solicitudesFiltradas.length === 0 ? (
+            <div className="p-12 text-center">
+              <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <h3 className="text-xl font-bold text-gray-700 mb-2">No hay solicitudes</h3>
+              <p className="text-gray-500">
+                {filtroEstado === 'todas' ? 'Aún no se han registrado solicitudes en el sistema' : `No hay solicitudes con el estado "${filtroEstado}"`}
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[700px]">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    {table.getHeaderGroups().map((headerGroup) => (
+                      <tr key={headerGroup.id}>
+                        {headerGroup.headers.map((header) => (
+                          <th
+                            key={header.id}
+                            className={`px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide select-none ${header.column.getCanSort() ? 'cursor-pointer hover:bg-gray-100' : ''}`}
+                            onClick={header.column.getToggleSortingHandler()}
                           >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-                            />
-                          </svg>
-                          {solicitud.telefono}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <svg
-                            className="w-4 h-4 text-accent"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                            />
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                            />
-                          </svg>
-                          {solicitud.barrio?.nombre && (
-                            <span className="font-medium">{solicitud.barrio.nombre} - </span>
-                          )}
-                          {solicitud.direccion}
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-2">
-                            <svg className="w-4 h-4 text-secondary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            <span className="text-xs text-gray-500">Solicitud:</span>
-                            <span>
-                              {solicitud.fechaSolicitud
-                                ? new Date(solicitud.fechaSolicitud).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-                                : <span className="text-gray-400 italic">No especificada</span>}
+                            <span className="flex items-center gap-1">
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                              {header.column.getCanSort() && (
+                                <span className="text-gray-400">
+                                  {header.column.getIsSorted() === 'asc' ? '↑' : header.column.getIsSorted() === 'desc' ? '↓' : '↕'}
+                                </span>
+                              )}
                             </span>
-                          </div>
-                          <div className="flex items-center gap-2 text-gray-500">
-                            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <span className="text-xs">Creación:</span>
-                            <span className="text-xs">{formatDate(solicitud.createdAt)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <svg
-                      className="w-6 h-6 text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
-                  </div>
+                          </th>
+                        ))}
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide w-8" />
+                      </tr>
+                    ))}
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {table.getRowModel().rows.map((row) => (
+                      <tr
+                        key={row.id}
+                        className="hover:bg-gray-50 cursor-pointer transition-colors"
+                        onClick={() => setSelectedSolicitud(row.original)}
+                      >
+                        {row.getVisibleCells().map((cell) => (
+                          <td key={cell.id} className="px-4 py-3">
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </td>
+                        ))}
+                        <td className="px-4 py-3 text-gray-400">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Paginación */}
+              <div className="px-4 sm:px-6 py-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-gray-600">
+                <span>
+                  Página <span className="font-bold text-neutral">{pagination.pageIndex + 1}</span> de{' '}
+                  <span className="font-bold text-neutral">{totalPages}</span>
+                  {' '}&middot; {totalDocs} solicitudes
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => table.setPageIndex(0)}
+                    disabled={!table.getCanPreviousPage()}
+                    className="px-2 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    title="Primera página"
+                  >
+                    «
+                  </button>
+                  <button
+                    onClick={() => table.previousPage()}
+                    disabled={!table.getCanPreviousPage()}
+                    className="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    ‹ Anterior
+                  </button>
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    const start = Math.max(0, Math.min(pagination.pageIndex - 2, totalPages - 5))
+                    const pageNum = start + i
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => table.setPageIndex(pageNum)}
+                        className={`px-3 py-1.5 rounded-lg border transition-colors ${
+                          pageNum === pagination.pageIndex
+                            ? 'bg-primary text-white border-primary font-bold'
+                            : 'border-gray-200 hover:bg-gray-100'
+                        }`}
+                      >
+                        {pageNum + 1}
+                      </button>
+                    )
+                  })}
+                  <button
+                    onClick={() => table.nextPage()}
+                    disabled={!table.getCanNextPage()}
+                    className="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Siguiente ›
+                  </button>
+                  <button
+                    onClick={() => table.setPageIndex(totalPages - 1)}
+                    disabled={!table.getCanNextPage()}
+                    className="px-2 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    title="Última página"
+                  >
+                    »
+                  </button>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </main>
 
       {/* Modal de Detalles */}

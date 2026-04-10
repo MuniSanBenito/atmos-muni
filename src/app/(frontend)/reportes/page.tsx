@@ -1,8 +1,17 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../../../context/AuthContext'
+import { fetchAuth } from '../../../lib/fetchAuth'
+import {
+  useReactTable,
+  getCoreRowModel,
+  flexRender,
+  createColumnHelper,
+  SortingState,
+  PaginationState,
+} from '@tanstack/react-table'
 
 interface Solicitud {
   id: string
@@ -24,8 +33,8 @@ interface Solicitud {
 interface Reporte {
   periodo: {
     nombre: string
-    desde: string
-    hasta: string
+    desde: string | null
+    hasta: string | null
   }
   filtros: {
     tipoPago: string
@@ -41,7 +50,15 @@ interface Reporte {
     tasaExito: number
   }
   solicitudes: Solicitud[]
+  totalDocs: number
+  totalPages: number
+  page: number
+  limit: number
+  hasPrevPage: boolean
+  hasNextPage: boolean
 }
+
+const reporteColumnHelper = createColumnHelper<Solicitud>()
 
 export default function ReportesPage() {
   const router = useRouter()
@@ -54,21 +71,31 @@ export default function ReportesPage() {
   const [fechaHasta, setFechaHasta] = useState('')
   const [usarFechasPersonalizadas, setUsarFechasPersonalizadas] = useState(false)
   const [busquedaTabla, setBusquedaTabla] = useState('')
-  const [tablaOrdenCampo, setTablaOrdenCampo] = useState<'createdAt' | 'fechaSolicitud'>('createdAt')
-  const [tablaOrdenDir, setTablaOrdenDir] = useState<'asc' | 'desc'>('desc')
+  const [busquedaDebounced, setBusquedaDebounced] = useState('')
+  const busquedaRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [tablaSorting, setTablaSorting] = useState<SortingState>([{ id: 'createdAt', desc: true }])
+  const [tablaPaginacion, setTablaPaginacion] = useState<PaginationState>({ pageIndex: 0, pageSize: 25 })
+  const [forceRefresh, setForceRefresh] = useState(0)
 
   const fetchReporte = useCallback(async () => {
     setLoading(true)
     try {
-      let url = `/api/solicitudes/reporte?tipoPago=${tipoPago}`
-      
-      if (usarFechasPersonalizadas && fechaDesde && fechaHasta) {
-        url += `&fechaDesde=${fechaDesde}&fechaHasta=${fechaHasta}`
-      } else {
-        url += `&periodo=${periodo}`
+      const params = new URLSearchParams()
+      params.set('tipoPago', tipoPago)
+      params.set('page', String(tablaPaginacion.pageIndex + 1))
+      params.set('limit', String(tablaPaginacion.pageSize))
+      if (tablaSorting[0]) {
+        params.set('sort', tablaSorting[0].id)
+        params.set('sortDir', tablaSorting[0].desc ? 'desc' : 'asc')
       }
-
-      const response = await fetch(url, { credentials: 'include' })
+      if (busquedaDebounced) params.set('q', busquedaDebounced)
+      if (usarFechasPersonalizadas && fechaDesde && fechaHasta) {
+        params.set('fechaDesde', fechaDesde)
+        params.set('fechaHasta', fechaHasta)
+      } else {
+        params.set('periodo', periodo)
+      }
+      const response = await fetchAuth(`/api/solicitudes/reporte?${params}`)
       const data = await response.json()
       if (data.success) {
         setReporte(data.reporte)
@@ -78,7 +105,7 @@ export default function ReportesPage() {
     } finally {
       setLoading(false)
     }
-  }, [periodo, tipoPago, fechaDesde, fechaHasta, usarFechasPersonalizadas])
+  }, [periodo, tipoPago, fechaDesde, fechaHasta, usarFechasPersonalizadas, tablaPaginacion, tablaSorting, busquedaDebounced, forceRefresh])
 
   useEffect(() => {
     if (!authLoading) {
@@ -91,6 +118,23 @@ export default function ReportesPage() {
       }
     }
   }, [user, authLoading, router, fetchReporte])
+
+  // Debounce búsqueda
+  useEffect(() => {
+    if (busquedaRef.current) clearTimeout(busquedaRef.current)
+    busquedaRef.current = setTimeout(() => {
+      setBusquedaDebounced(busquedaTabla)
+      setTablaPaginacion((p) => ({ ...p, pageIndex: 0 }))
+    }, 400)
+    return () => {
+      if (busquedaRef.current) clearTimeout(busquedaRef.current)
+    }
+  }, [busquedaTabla])
+
+  // Reset página al cambiar filtros
+  useEffect(() => {
+    setTablaPaginacion((p) => ({ ...p, pageIndex: 0 }))
+  }, [tipoPago, usarFechasPersonalizadas])
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
@@ -132,53 +176,118 @@ export default function ReportesPage() {
       semana: 'Esta Semana',
       mes: 'Este Mes',
       año: 'Este Año',
+      todo: 'Todo el tiempo',
     }
     return labels[periodo] || periodo
   }
 
-  const normalizarTexto = (texto: string) =>
-    texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const reporteColumns = useMemo(() => [
+    reporteColumnHelper.accessor('createdAt', {
+      header: 'Creación',
+      cell: (info) => <span className="text-sm whitespace-nowrap">{formatDateShort(info.getValue())}</span>,
+      sortingFn: 'datetime',
+    }),
+    reporteColumnHelper.accessor('fechaSolicitud', {
+      header: 'F. Solicitud',
+      cell: (info) => info.getValue()
+        ? <span className="text-sm whitespace-nowrap">{formatDateShort(info.getValue())}</span>
+        : <span className="text-gray-400 italic text-xs">No especificada</span>,
+      sortingFn: (rowA, rowB) => {
+        const a = rowA.original.fechaSolicitud ? new Date(rowA.original.fechaSolicitud).getTime() : new Date(rowA.original.createdAt).getTime()
+        const b = rowB.original.fechaSolicitud ? new Date(rowB.original.fechaSolicitud).getTime() : new Date(rowB.original.createdAt).getTime()
+        return a - b
+      },
+    }),
+    reporteColumnHelper.display({
+      id: 'nombreCompleto',
+      header: 'Nombre',
+      cell: ({ row }) => (
+        <div>
+          <div className="text-sm font-medium text-gray-900">{row.original.nombre} {row.original.apellido}</div>
+          <div className="text-xs text-gray-500">{row.original.telefono}</div>
+        </div>
+      ),
+    }),
+    reporteColumnHelper.display({
+      id: 'direccionCompleta',
+      header: 'Dirección',
+      cell: ({ row }) => (
+        <div>
+          <div className="text-sm text-gray-900">{row.original.direccion}</div>
+          {row.original.barrio && <div className="text-xs text-gray-500">{row.original.barrio}</div>}
+        </div>
+      ),
+    }),
+    reporteColumnHelper.accessor('tipoPago', {
+      header: 'Tipo',
+      enableSorting: false,
+      cell: (info) => (
+        <span className={`px-2 py-1 rounded text-xs font-medium ${
+          info.getValue() === 'pagado' ? 'bg-primary/10 text-primary' : 'bg-accent/10 text-accent'
+        }`}>{getTipoPagoLabel(info.getValue())}</span>
+      ),
+    }),
+    reporteColumnHelper.accessor('estado', {
+      header: 'Estado',
+      enableSorting: false,
+      cell: (info) => (
+        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+          info.getValue() === 'realizada' ? 'bg-green-100 text-green-800' :
+          info.getValue() === 'no_realizada' ? 'bg-red-100 text-red-800' :
+          info.getValue() === 'pendiente' ? 'bg-yellow-100 text-yellow-800' :
+          'bg-blue-100 text-blue-800'
+        }`}>{getEstadoLabel(info.getValue())}</span>
+      ),
+    }),
+    reporteColumnHelper.display({
+      id: 'motivo',
+      header: 'Motivo / Notas',
+      cell: ({ row }) => row.original.motivoNoRealizacion
+        ? <span className="text-sm text-red-600">{row.original.motivoNoRealizacion}</span>
+        : row.original.notas
+          ? <span className="text-sm text-gray-600">{row.original.notas}</span>
+          : <span className="text-sm text-gray-400">-</span>,
+    }),
+  ], [])
 
-  const toggleTablaOrden = (campo: 'createdAt' | 'fechaSolicitud') => {
-    if (tablaOrdenCampo === campo) {
-      setTablaOrdenDir(tablaOrdenDir === 'desc' ? 'asc' : 'desc')
-    } else {
-      setTablaOrdenCampo(campo)
-      setTablaOrdenDir('desc')
-    }
-  }
+  const tablaReporte = useReactTable({
+    data: reporte?.solicitudes ?? [],
+    columns: reporteColumns,
+    state: { sorting: tablaSorting, pagination: tablaPaginacion },
+    onSortingChange: (updater) => {
+      const newSorting = typeof updater === 'function' ? updater(tablaSorting) : updater
+      setTablaSorting(newSorting)
+      setTablaPaginacion((p) => ({ ...p, pageIndex: 0 }))
+    },
+    onPaginationChange: setTablaPaginacion,
+    getCoreRowModel: getCoreRowModel(),
+    manualPagination: true,
+    manualSorting: true,
+    rowCount: reporte?.totalDocs ?? 0,
+  })
 
-  const solicitudesFiltradas = reporte
-    ? reporte.solicitudes
-        .filter((s) => {
-          if (!busquedaTabla.trim()) return true
-          const term = normalizarTexto(busquedaTabla.trim())
-          const campos = [
-            s.nombre,
-            s.apellido,
-            s.telefono,
-            s.direccion,
-            s.barrio,
-            s.notas,
-            s.motivoNoRealizacion,
-            s.tipoPago === 'pagado' ? 'pagado' : 'subsidiado',
-            s.estado === 'no_realizada' ? 'no realizada' : s.estado.replace('_', ' '),
-          ]
-          return normalizarTexto(campos.join(' ')).includes(term)
-        })
-        .sort((a, b) => {
-          const getVal = (s: Solicitud) => {
-            if (tablaOrdenCampo === 'fechaSolicitud') {
-              return s.fechaSolicitud ? new Date(s.fechaSolicitud).getTime() : new Date(s.createdAt).getTime()
-            }
-            return new Date(s.createdAt).getTime()
-          }
-          return tablaOrdenDir === 'desc' ? getVal(b) - getVal(a) : getVal(a) - getVal(b)
-        })
-    : []
-
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
     if (!reporte) return
+
+    let allSolicitudes = reporte.solicitudes
+    if (reporte.totalDocs > reporte.solicitudes.length) {
+      try {
+        const params = new URLSearchParams()
+        params.set('tipoPago', tipoPago)
+        params.set('export', 'true')
+        if (usarFechasPersonalizadas && fechaDesde && fechaHasta) {
+          params.set('fechaDesde', fechaDesde)
+          params.set('fechaHasta', fechaHasta)
+        } else {
+          params.set('periodo', periodo)
+        }
+        const res = await fetchAuth(`/api/solicitudes/reporte?${params}`)
+        const exportData = await res.json()
+        if (exportData.success) allSolicitudes = exportData.reporte.solicitudes
+      } catch {
+        // continúa con la página actual
+      }
+    }
 
     const periodoTexto = usarFechasPersonalizadas ? 'Personalizado' : getPeriodoLabel(reporte.periodo.nombre)
     const fechaGeneracion = new Date().toLocaleDateString('es-AR', {
@@ -322,9 +431,9 @@ export default function ReportesPage() {
           </tr>
           <tr>
             <td class="stat-label">Desde</td>
-            <td class="stat-value" colspan="2">${formatDateShort(reporte.periodo.desde)}</td>
+            <td class="stat-value" colspan="2">${reporte.periodo.desde ? formatDateShort(reporte.periodo.desde) : '-'}</td>
             <td class="stat-label">Hasta</td>
-            <td class="stat-value" colspan="2">${formatDateShort(reporte.periodo.hasta)}</td>
+            <td class="stat-value" colspan="2">${reporte.periodo.hasta ? formatDateShort(reporte.periodo.hasta) : '-'}</td>
             <td></td>
           </tr>
           <tr class="empty-row"><td colspan="7"></td></tr>
@@ -362,7 +471,7 @@ export default function ReportesPage() {
           
           <!-- Tabla de Detalle -->
           <tr>
-            <td colspan="8" class="section-header">📋 DETALLE DE SOLICITUDES (${reporte.solicitudes.length} registros)</td>
+            <td colspan="8" class="section-header">📋 DETALLE DE SOLICITUDES (${allSolicitudes.length} registros)</td>
           </tr>
           <tr>
             <td class="table-header">Fecha Creación</td>
@@ -374,7 +483,7 @@ export default function ReportesPage() {
             <td class="table-header">Estado</td>
             <td class="table-header">Notas / Motivo</td>
           </tr>
-          ${reporte.solicitudes.map((s, index) => {
+          ${allSolicitudes.map((s, index) => {
             const rowClass = index % 2 === 0 ? 'table-row' : 'table-row-alt'
             const estadoClass = s.estado === 'realizada' ? 'estado-realizada' :
                                s.estado === 'no_realizada' ? 'estado-no-realizada' :
@@ -439,7 +548,7 @@ export default function ReportesPage() {
               </button>
               <button
                 onClick={exportToExcel}
-                disabled={!reporte || reporte.solicitudes.length === 0}
+                disabled={!reporte || reporte.estadisticas.total === 0}
                 className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -476,6 +585,7 @@ export default function ReportesPage() {
                 <option value="semana">Esta Semana</option>
                 <option value="mes">Este Mes</option>
                 <option value="año">Este Año</option>
+                <option value="todo">Todo el tiempo</option>
               </select>
             </div>
 
@@ -528,7 +638,7 @@ export default function ReportesPage() {
 
           <div className="flex flex-wrap gap-3">
             <button
-              onClick={fetchReporte}
+              onClick={() => { setTablaPaginacion((p) => ({ ...p, pageIndex: 0 })); setForceRefresh((n) => n + 1) }}
               className="px-6 py-2 bg-primary text-white font-semibold rounded-lg hover:bg-neutral transition-colors"
             >
               Generar Reporte
@@ -568,7 +678,9 @@ export default function ReportesPage() {
                     {usarFechasPersonalizadas ? 'Período Personalizado' : getPeriodoLabel(reporte.periodo.nombre)}
                   </h3>
                   <p className="text-white/80">
-                    {formatDateShort(reporte.periodo.desde)} - {formatDateShort(reporte.periodo.hasta)}
+                    {reporte.periodo.desde && reporte.periodo.hasta
+                      ? `${formatDateShort(reporte.periodo.desde)} - ${formatDateShort(reporte.periodo.hasta)}`
+                      : 'Todos los registros'}
                   </p>
                 </div>
                 <div className="text-right">
@@ -684,31 +796,43 @@ export default function ReportesPage() {
 
             {/* Tabla de Solicitudes */}
             <div className="bg-white rounded-xl shadow overflow-hidden">
-              <div className="p-4 sm:p-6 border-b space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                  <h3 className="text-lg font-bold text-neutral">Detalle de Solicitudes</h3>
-                  <p className="text-sm text-gray-600">
-                    {solicitudesFiltradas.length} de {reporte.solicitudes.length} solicitudes
-                  </p>
+              {/* Header tabla */}
+              <div className="p-4 sm:p-6 border-b flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="flex-1">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-lg font-bold text-neutral">Detalle de Solicitudes</h3>
+                    <p className="text-sm text-gray-500">{reporte.solicitudes.length} de {reporte.totalDocs}</p>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={busquedaTabla}
+                      onChange={(e) => setBusquedaTabla(e.target.value)}
+                      placeholder="Buscar por nombre, dirección, barrio, teléfono, estado..."
+                      className="w-full px-4 py-2 pr-10 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none text-sm transition-colors"
+                    />
+                    {busquedaTabla ? (
+                      <button onClick={() => setBusquedaTabla('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    ) : (
+                      <svg className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    )}
+                  </div>
                 </div>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={busquedaTabla}
-                    onChange={(e) => setBusquedaTabla(e.target.value)}
-                    placeholder="Buscar por nombre, dirección, barrio, teléfono, estado..."
-                    className="w-full px-4 py-2 pr-10 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none text-sm transition-colors"
-                  />
-                  {busquedaTabla ? (
-                    <button onClick={() => setBusquedaTabla('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
-                  ) : (
-                    <svg className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                  )}
+                <div className="flex items-center gap-2 text-sm text-gray-600 shrink-0">
+                  <span>Filas:</span>
+                  <select
+                    value={tablaPaginacion.pageSize}
+                    onChange={(e) => setTablaPaginacion({ pageIndex: 0, pageSize: Number(e.target.value) })}
+                    className="px-2 py-1 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
+                  >
+                    {[10, 25, 50, 100].map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <span className="text-xs text-gray-400">por página</span>
                 </div>
               </div>
-              
+
               {reporte.solicitudes.length === 0 ? (
                 <div className="p-12 text-center">
                   <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -718,95 +842,85 @@ export default function ReportesPage() {
                   <p className="text-gray-500">No hay solicitudes en el período seleccionado</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1000px]">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th
-                          className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                          onClick={() => toggleTablaOrden('createdAt')}
-                        >
-                          <span className="flex items-center gap-1">
-                            Creación {tablaOrdenCampo === 'createdAt' ? (tablaOrdenDir === 'desc' ? '↓' : '↑') : '↕'}
-                          </span>
-                        </th>
-                        <th
-                          className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase cursor-pointer hover:bg-gray-100 select-none"
-                          onClick={() => toggleTablaOrden('fechaSolicitud')}
-                        >
-                          <span className="flex items-center gap-1">
-                            F. Solicitud {tablaOrdenCampo === 'fechaSolicitud' ? (tablaOrdenDir === 'desc' ? '↓' : '↑') : '↕'}
-                          </span>
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Nombre</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Dirección</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Tipo</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Estado</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Motivo</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {solicitudesFiltradas.length === 0 ? (
-                        <tr>
-                          <td colSpan={7} className="px-4 py-8 text-center text-gray-400 text-sm">
-                            Sin resultados para "{busquedaTabla}"
-                          </td>
-                        </tr>
-                      ) : solicitudesFiltradas.map((solicitud) => (
-                        <tr key={solicitud.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                            {formatDateShort(solicitud.createdAt)}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                            {solicitud.fechaSolicitud
-                              ? formatDateShort(solicitud.fechaSolicitud)
-                              : <span className="text-gray-400 italic text-xs">No especificada</span>}
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="text-sm font-medium text-gray-900">
-                              {solicitud.nombre} {solicitud.apellido}
-                            </div>
-                            <div className="text-xs text-gray-500">{solicitud.telefono}</div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="text-sm text-gray-900">{solicitud.direccion}</div>
-                            {solicitud.barrio && (
-                              <div className="text-xs text-gray-500">{solicitud.barrio}</div>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${
-                              solicitud.tipoPago === 'pagado'
-                                ? 'bg-primary/10 text-primary'
-                                : 'bg-accent/10 text-accent'
-                            }`}>
-                              {getTipoPagoLabel(solicitud.tipoPago)}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                              solicitud.estado === 'realizada' ? 'bg-green-100 text-green-800' :
-                              solicitud.estado === 'no_realizada' ? 'bg-red-100 text-red-800' :
-                              solicitud.estado === 'pendiente' ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-blue-100 text-blue-800'
-                            }`}>
-                              {getEstadoLabel(solicitud.estado)}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3">
-                            {solicitud.motivoNoRealizacion ? (
-                              <span className="text-sm text-red-600">{solicitud.motivoNoRealizacion}</span>
-                            ) : solicitud.notas ? (
-                              <span className="text-sm text-gray-600">{solicitud.notas}</span>
-                            ) : (
-                              <span className="text-sm text-gray-400">-</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[900px]">
+                      <thead className="bg-gray-50 border-b border-gray-200">
+                        {tablaReporte.getHeaderGroups().map((headerGroup) => (
+                          <tr key={headerGroup.id}>
+                            {headerGroup.headers.map((header) => (
+                              <th
+                                key={header.id}
+                                className={`px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide select-none ${
+                                  header.column.getCanSort() ? 'cursor-pointer hover:bg-gray-100' : ''
+                                }`}
+                                onClick={header.column.getToggleSortingHandler()}
+                              >
+                                <span className="flex items-center gap-1">
+                                  {flexRender(header.column.columnDef.header, header.getContext())}
+                                  {header.column.getCanSort() && (
+                                    <span className="text-gray-400">
+                                      {header.column.getIsSorted() === 'asc' ? '↑' : header.column.getIsSorted() === 'desc' ? '↓' : '↕'}
+                                    </span>
+                                  )}
+                                </span>
+                              </th>
+                            ))}
+                          </tr>
+                        ))}
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {tablaReporte.getRowModel().rows.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="px-4 py-8 text-center text-gray-400 text-sm">
+                              Sin resultados para &ldquo;{busquedaTabla}&rdquo;
+                            </td>
+                          </tr>
+                        ) : tablaReporte.getRowModel().rows.map((row) => (
+                          <tr key={row.id} className="hover:bg-gray-50">
+                            {row.getVisibleCells().map((cell) => (
+                              <td key={cell.id} className="px-4 py-3">
+                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Paginación */}
+                  <div className="px-4 sm:px-6 py-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-gray-600">
+                    <span>
+                      Página <span className="font-bold text-neutral">{tablaPaginacion.pageIndex + 1}</span> de{' '}
+                      <span className="font-bold text-neutral">{reporte.totalPages}</span>
+                      {' '}&middot; {reporte.totalDocs} solicitudes
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setTablaPaginacion((p) => ({ ...p, pageIndex: 0 }))} disabled={!reporte.hasPrevPage} className="px-2 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">«</button>
+                      <button onClick={() => setTablaPaginacion((p) => ({ ...p, pageIndex: p.pageIndex - 1 }))} disabled={!reporte.hasPrevPage} className="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">‹ Anterior</button>
+                      {Array.from({ length: Math.min(5, reporte.totalPages) }, (_, i) => {
+                        const start = Math.max(0, Math.min(tablaPaginacion.pageIndex - 2, reporte.totalPages - 5))
+                        const pageNum = start + i
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => setTablaPaginacion((p) => ({ ...p, pageIndex: pageNum }))}
+                            className={`px-3 py-1.5 rounded-lg border transition-colors ${
+                              pageNum === tablaPaginacion.pageIndex
+                                ? 'bg-primary text-white border-primary font-bold'
+                                : 'border-gray-200 hover:bg-gray-100'
+                            }`}
+                          >
+                            {pageNum + 1}
+                          </button>
+                        )
+                      })}
+                      <button onClick={() => setTablaPaginacion((p) => ({ ...p, pageIndex: p.pageIndex + 1 }))} disabled={!reporte.hasNextPage} className="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">Siguiente ›</button>
+                      <button onClick={() => setTablaPaginacion((p) => ({ ...p, pageIndex: reporte.totalPages - 1 }))} disabled={!reporte.hasNextPage} className="px-2 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">»</button>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
           </>

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 
 interface User {
   id: string
@@ -14,6 +14,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>
   logout: () => void
   loading: boolean
+  refreshAuth: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -21,27 +22,48 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const handlingExpiry = useRef(false)
 
-  useEffect(() => {
-    // Verificar si hay una sesión activa al cargar
-    checkAuth()
-  }, [])
-
-  const checkAuth = async () => {
+  const refreshAuth = useCallback(async () => {
     try {
-      const response = await fetch('/api/auth/me', {
-        credentials: 'include',
-      })
+      const response = await fetch('/api/auth/me', { credentials: 'include' })
       if (response.ok) {
         const data = await response.json()
         setUser(data.user)
+      } else {
+        setUser(null)
       }
     } catch (error) {
       console.error('Error al verificar autenticación:', error)
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    refreshAuth()
+  }, [refreshAuth])
+
+  // Escuchar evento global de sesión expirada (disparado por fetchAuth)
+  useEffect(() => {
+    const handleSessionExpired = async () => {
+      if (handlingExpiry.current) return
+      handlingExpiry.current = true
+      try {
+        const response = await fetch('/api/auth/me', { credentials: 'include' })
+        if (!response.ok) {
+          setUser(null)
+        }
+      } catch {
+        setUser(null)
+      } finally {
+        handlingExpiry.current = false
+      }
+    }
+
+    window.addEventListener('auth:session-expired', handleSessionExpired)
+    return () => window.removeEventListener('auth:session-expired', handleSessionExpired)
+  }, [])
 
   const login = async (email: string, password: string) => {
     const response = await fetch('/api/auth/login', {
@@ -68,7 +90,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ user, login, logout, loading, refreshAuth }}>
+      {children}
+    </AuthContext.Provider>
   )
 }
 

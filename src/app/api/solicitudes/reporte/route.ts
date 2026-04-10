@@ -13,31 +13,44 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
 
     // Parámetros de filtro
-    const periodo = searchParams.get('periodo') || 'mes' // dia, semana, mes, año
-    const tipoPago = searchParams.get('tipoPago') || 'todos' // subsidiado, pagado, todos
+    const periodo = searchParams.get('periodo') || 'mes' // dia, semana, mes, año, todo
+    const tipoPago = searchParams.get('tipoPago') || 'todos'
     const fechaDesde = searchParams.get('fechaDesde')
     const fechaHasta = searchParams.get('fechaHasta')
 
+    // Paginación
+    const isExport = searchParams.get('export') === 'true'
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
+    const limit = isExport ? 10000 : Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '25', 10)))
+
+    // Sorting
+    const sortField = searchParams.get('sort') || 'createdAt'
+    const sortDir = searchParams.get('sortDir') || 'desc'
+    const sortParam = sortDir === 'desc' ? `-${sortField}` : sortField
+
+    // Búsqueda
+    const busqueda = searchParams.get('q')?.trim()
+
     // Calcular rango de fechas según el período
     const now = new Date()
-    let startDate: Date
+    let startDate: Date | null = null
     let endDate: Date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
 
     if (fechaDesde && fechaHasta) {
-      // Usar fechas personalizadas
       startDate = new Date(fechaDesde)
       endDate = new Date(fechaHasta)
       endDate.setHours(23, 59, 59)
-    } else {
+    } else if (periodo !== 'todo') {
       switch (periodo) {
         case 'dia':
           startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0)
           break
-        case 'semana':
+        case 'semana': {
           const dayOfWeek = now.getDay()
           const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1)
           startDate = new Date(now.getFullYear(), now.getMonth(), diff, 0, 0, 0)
           break
+        }
         case 'mes':
           startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0)
           break
@@ -48,42 +61,63 @@ export async function GET(request: NextRequest) {
           startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0)
       }
     }
+    // periodo === 'todo': startDate permanece null → sin filtro de fecha
 
-    // Construir where clause base
-    const baseWhere: any = {
-      createdAt: {
+    // Where base (sin búsqueda de texto, para estadísticas)
+    const baseWhere: any = {}
+    if (startDate) {
+      baseWhere.createdAt = {
         greater_than_equal: startDate.toISOString(),
         less_than_equal: endDate.toISOString(),
-      },
+      }
     }
-
-    // Agregar filtro de tipo de pago si no es "todos"
     if (tipoPago !== 'todos') {
       baseWhere.tipoPago = { equals: tipoPago }
     }
 
-    // Obtener todas las solicitudes del período
-    const todasSolicitudes = await payload.find({
-      collection: 'solicitudes',
-      where: baseWhere,
-      limit: 1000,
-      sort: '-createdAt',
-    })
+    // Where para el detalle (agrega búsqueda de texto)
+    const detailWhere: any = { ...baseWhere }
+    if (busqueda) {
+      detailWhere.or = [
+        { nombre: { contains: busqueda } },
+        { apellido: { contains: busqueda } },
+        { telefono: { contains: busqueda } },
+        { direccion: { contains: busqueda } },
+      ]
+    }
 
-    // Contar por estado
-    const realizadas = todasSolicitudes.docs.filter((s: any) => s.estado === 'realizada')
-    const noRealizadas = todasSolicitudes.docs.filter((s: any) => s.estado === 'no_realizada')
-    const pendientes = todasSolicitudes.docs.filter((s: any) => s.estado === 'pendiente')
-    const enCamino = todasSolicitudes.docs.filter((s: any) => s.estado === 'en_camino')
+    // Estadísticas con count en paralelo (sin traer docs, muy eficiente)
+    const [
+      countTotal,
+      countRealizadas,
+      countNoRealizadas,
+      countPendientes,
+      countEnCamino,
+      countSubsidiados,
+      countPagados,
+      solicitudesResult,
+    ] = await Promise.all([
+      payload.count({ collection: 'solicitudes', where: baseWhere }),
+      payload.count({ collection: 'solicitudes', where: { ...baseWhere, estado: { equals: 'realizada' } } }),
+      payload.count({ collection: 'solicitudes', where: { ...baseWhere, estado: { equals: 'no_realizada' } } }),
+      payload.count({ collection: 'solicitudes', where: { ...baseWhere, estado: { equals: 'pendiente' } } }),
+      payload.count({ collection: 'solicitudes', where: { ...baseWhere, estado: { equals: 'en_camino' } } }),
+      payload.count({ collection: 'solicitudes', where: { ...baseWhere, tipoPago: { equals: 'subsidiado' } } }),
+      payload.count({ collection: 'solicitudes', where: { ...baseWhere, tipoPago: { equals: 'pagado' } } }),
+      payload.find({
+        collection: 'solicitudes',
+        where: detailWhere,
+        sort: sortParam,
+        page: isExport ? 1 : page,
+        limit,
+      }),
+    ])
 
-    // Contar por tipo de pago (dentro del período)
-    const subsidiados = todasSolicitudes.docs.filter((s: any) => s.tipoPago === 'subsidiado')
-    const pagados = todasSolicitudes.docs.filter((s: any) => s.tipoPago === 'pagado')
-
-    // Calcular tasa de éxito
-    const totalCompletadas = realizadas.length + noRealizadas.length
-    const tasaExito = totalCompletadas > 0 
-      ? Math.round((realizadas.length / totalCompletadas) * 100) 
+    const totalRealizadas = countRealizadas.totalDocs
+    const totalNoRealizadas = countNoRealizadas.totalDocs
+    const totalCompletadas = totalRealizadas + totalNoRealizadas
+    const tasaExito = totalCompletadas > 0
+      ? Math.round((totalRealizadas / totalCompletadas) * 100)
       : 0
 
     return NextResponse.json({
@@ -91,23 +125,21 @@ export async function GET(request: NextRequest) {
       reporte: {
         periodo: {
           nombre: periodo,
-          desde: startDate.toISOString(),
-          hasta: endDate.toISOString(),
+          desde: startDate?.toISOString() ?? null,
+          hasta: startDate ? endDate.toISOString() : null,
         },
-        filtros: {
-          tipoPago,
-        },
+        filtros: { tipoPago },
         estadisticas: {
-          total: todasSolicitudes.totalDocs,
-          realizadas: realizadas.length,
-          noRealizadas: noRealizadas.length,
-          pendientes: pendientes.length,
-          enCamino: enCamino.length,
-          subsidiados: subsidiados.length,
-          pagados: pagados.length,
+          total: countTotal.totalDocs,
+          realizadas: totalRealizadas,
+          noRealizadas: totalNoRealizadas,
+          pendientes: countPendientes.totalDocs,
+          enCamino: countEnCamino.totalDocs,
+          subsidiados: countSubsidiados.totalDocs,
+          pagados: countPagados.totalDocs,
           tasaExito,
         },
-        solicitudes: todasSolicitudes.docs.map((s: any) => ({
+        solicitudes: solicitudesResult.docs.map((s: any) => ({
           id: s.id,
           nombre: s.nombre,
           apellido: s.apellido,
@@ -123,6 +155,12 @@ export async function GET(request: NextRequest) {
           createdAt: s.createdAt,
           updatedAt: s.updatedAt,
         })),
+        totalDocs: solicitudesResult.totalDocs,
+        totalPages: solicitudesResult.totalPages,
+        page: solicitudesResult.page,
+        limit,
+        hasPrevPage: solicitudesResult.hasPrevPage,
+        hasNextPage: solicitudesResult.hasNextPage,
       },
     })
   } catch (error) {

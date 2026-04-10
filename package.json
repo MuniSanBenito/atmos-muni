@@ -25,6 +25,7 @@
     "@payloadcms/richtext-lexical": "3.68.3",
     "@payloadcms/richtext-slate": "3.68.3",
     "@payloadcms/ui": "3.68.3",
+    "@tanstack/react-table": "^8.21.3",
     "cross-env": "10.1.0",
     "dotenv": "17.2.3",
     "graphql": "16.12.0",
