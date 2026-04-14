@@ -44,6 +44,7 @@ export default function SolicitudesPage() {
   const [filtroEstado, setFiltroEstado] = useState<string>('todas')
   const [busqueda, setBusqueda] = useState<string>('')
   const [filtroFecha, setFiltroFecha] = useState<string>('')
+  const [filtroTipoPago, setFiltroTipoPago] = useState<string>('todos')
   const [sorting, setSorting] = useState<SortingState>([{ id: 'createdAt', desc: true }])
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 25 })
   const busquedaRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -60,6 +61,7 @@ export default function SolicitudesPage() {
         params.set('sortDir', sorting[0].desc ? 'desc' : 'asc')
       }
       if (filtroEstado !== 'todas') params.set('estado', filtroEstado)
+      if (filtroTipoPago !== 'todos') params.set('tipoPago', filtroTipoPago)
       if (busquedaDebounced) params.set('q', busquedaDebounced)
 
       const response = await fetchAuth(`/api/solicitudes?${params}`)
@@ -74,7 +76,7 @@ export default function SolicitudesPage() {
     } finally {
       setLoading(false)
     }
-  }, [pagination.pageIndex, pagination.pageSize, sorting, filtroEstado, busquedaDebounced])
+  }, [pagination.pageIndex, pagination.pageSize, sorting, filtroEstado, filtroTipoPago, busquedaDebounced])
 
   useEffect(() => {
     if (!authLoading) {
@@ -99,7 +101,7 @@ export default function SolicitudesPage() {
   // Reset página al cambiar filtros
   useEffect(() => {
     setPagination((p) => ({ ...p, pageIndex: 0 }))
-  }, [filtroEstado, filtroFecha])
+  }, [filtroEstado, filtroFecha, filtroTipoPago])
 
   const getEstadoBadge = (estado: string) => {
     const badges: Record<string, string> = {
@@ -204,6 +206,11 @@ export default function SolicitudesPage() {
         enableSorting: false,
         cell: (info) => getEstadoBadge(info.getValue()),
       }),
+      columnHelper.accessor('fechaRealizacion', {
+        header: 'F. Realización',
+        enableSorting: false,
+        cell: (info) => formatDateShort(info.getValue()),
+      }),
     ],
     [],
   )
@@ -225,13 +232,14 @@ export default function SolicitudesPage() {
 
   const limpiarFiltros = () => {
     setFiltroEstado('todas')
+    setFiltroTipoPago('todos')
     setBusqueda('')
     setFiltroFecha('')
     setSorting([{ id: 'createdAt', desc: true }])
     setPagination({ pageIndex: 0, pageSize: 25 })
   }
 
-  const hayFiltros = busqueda || filtroFecha || filtroEstado !== 'todas'
+  const hayFiltros = busqueda || filtroFecha || filtroEstado !== 'todas' || filtroTipoPago !== 'todos'
 
   if (!user) return null
 
@@ -327,6 +335,26 @@ export default function SolicitudesPage() {
             </div>
           </div>
 
+          {/* Filtro por Tipo de Pago */}
+          <div>
+            <label className="text-sm font-bold text-neutral block mb-2">💳 Tipo de Pago</label>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: 'todos', label: 'Todos', active: 'bg-neutral text-white', idle: 'bg-gray-100 text-gray-700 hover:bg-gray-200' },
+                { key: 'subsidiado', label: 'Subsidiado', active: 'bg-emerald-600 text-white', idle: 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200' },
+                { key: 'pagado', label: 'Pagado', active: 'bg-primary text-white', idle: 'bg-primary/10 text-primary hover:bg-primary/20' },
+              ].map(({ key, label, active, idle }) => (
+                <button
+                  key={key}
+                  onClick={() => setFiltroTipoPago(key)}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-colors text-sm ${filtroTipoPago === key ? active : idle}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Filtros activos + limpiar */}
           {hayFiltros && (
             <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-gray-200">
@@ -335,6 +363,7 @@ export default function SolicitudesPage() {
                 {busqueda && <span className="px-2 py-0.5 bg-primary/10 text-primary rounded-full text-xs">Búsqueda: "{busqueda}"</span>}
                 {filtroFecha && <span className="px-2 py-0.5 bg-accent/10 text-accent rounded-full text-xs">Fecha: {new Date(filtroFecha + 'T12:00:00').toLocaleDateString('es-AR')}</span>}
                 {filtroEstado !== 'todas' && <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full text-xs capitalize">{filtroEstado.replace('_', ' ')}</span>}
+                {filtroTipoPago !== 'todos' && <span className="px-2 py-0.5 bg-primary/10 text-primary rounded-full text-xs capitalize">{filtroTipoPago}</span>}
               </div>
               <button onClick={limpiarFiltros} className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors font-medium text-sm">
                 🗑️ Limpiar filtros

@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
 
     // Filtros opcionales
     const estado = searchParams.get('estado')
+    const tipoPago = searchParams.get('tipoPago')
     const soloActivas = searchParams.get('activas') === 'true'
     const barrioId = searchParams.get('barrio')
 
@@ -77,6 +78,11 @@ export async function GET(request: NextRequest) {
     // Filtrar por barrio si se especifica
     if (barrioId) {
       where.barrio = { equals: barrioId }
+    }
+
+    // Filtrar por tipo de pago
+    if (tipoPago && tipoPago !== 'todos') {
+      where.tipoPago = { equals: tipoPago }
     }
 
     // Búsqueda de texto en nombre, apellido, telefono, direccion

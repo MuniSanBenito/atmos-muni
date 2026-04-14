@@ -76,12 +76,14 @@ export default function ReportesPage() {
   const [tablaSorting, setTablaSorting] = useState<SortingState>([{ id: 'createdAt', desc: true }])
   const [tablaPaginacion, setTablaPaginacion] = useState<PaginationState>({ pageIndex: 0, pageSize: 25 })
   const [forceRefresh, setForceRefresh] = useState(0)
+  const [filtroEstado, setFiltroEstado] = useState('todos')
 
   const fetchReporte = useCallback(async () => {
     setLoading(true)
     try {
       const params = new URLSearchParams()
       params.set('tipoPago', tipoPago)
+      if (filtroEstado !== 'todos') params.set('estado', filtroEstado)
       params.set('page', String(tablaPaginacion.pageIndex + 1))
       params.set('limit', String(tablaPaginacion.pageSize))
       if (tablaSorting[0]) {
@@ -105,7 +107,7 @@ export default function ReportesPage() {
     } finally {
       setLoading(false)
     }
-  }, [periodo, tipoPago, fechaDesde, fechaHasta, usarFechasPersonalizadas, tablaPaginacion, tablaSorting, busquedaDebounced, forceRefresh])
+  }, [periodo, tipoPago, filtroEstado, fechaDesde, fechaHasta, usarFechasPersonalizadas, tablaPaginacion, tablaSorting, busquedaDebounced, forceRefresh])
 
   useEffect(() => {
     if (!authLoading) {
@@ -134,7 +136,7 @@ export default function ReportesPage() {
   // Reset página al cambiar filtros
   useEffect(() => {
     setTablaPaginacion((p) => ({ ...p, pageIndex: 0 }))
-  }, [tipoPago, usarFechasPersonalizadas])
+  }, [tipoPago, usarFechasPersonalizadas, filtroEstado])
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
@@ -239,6 +241,13 @@ export default function ReportesPage() {
         }`}>{getEstadoLabel(info.getValue())}</span>
       ),
     }),
+    reporteColumnHelper.accessor('fechaRealizacion', {
+      header: 'F. Realización',
+      enableSorting: false,
+      cell: (info) => info.getValue()
+        ? <span className="text-sm whitespace-nowrap text-green-700">{formatDateShort(info.getValue())}</span>
+        : <span className="text-gray-400 text-xs">—</span>,
+    }),
     reporteColumnHelper.display({
       id: 'motivo',
       header: 'Motivo / Notas',
@@ -274,6 +283,7 @@ export default function ReportesPage() {
       try {
         const params = new URLSearchParams()
         params.set('tipoPago', tipoPago)
+        if (filtroEstado !== 'todos') params.set('estado', filtroEstado)
         params.set('export', 'true')
         if (usarFechasPersonalizadas && fechaDesde && fechaHasta) {
           params.set('fechaDesde', fechaDesde)
@@ -471,7 +481,7 @@ export default function ReportesPage() {
           
           <!-- Tabla de Detalle -->
           <tr>
-            <td colspan="8" class="section-header">📋 DETALLE DE SOLICITUDES (${allSolicitudes.length} registros)</td>
+            <td colspan="9" class="section-header">📋 DETALLE DE SOLICITUDES (${allSolicitudes.length} registros)</td>
           </tr>
           <tr>
             <td class="table-header">Fecha Creación</td>
@@ -481,6 +491,7 @@ export default function ReportesPage() {
             <td class="table-header">Dirección</td>
             <td class="table-header">Tipo Pago</td>
             <td class="table-header">Estado</td>
+            <td class="table-header">Fecha Realización</td>
             <td class="table-header">Notas / Motivo</td>
           </tr>
           ${allSolicitudes.map((s, index) => {
@@ -502,6 +513,7 @@ export default function ReportesPage() {
                 <td class="table-cell">${s.direccion}${s.barrio ? ' (' + s.barrio + ')' : ''}</td>
                 <td class="table-cell ${tipoClass}">${getTipoPagoLabel(s.tipoPago)}</td>
                 <td class="table-cell ${estadoClass}">${getEstadoLabel(s.estado)}</td>
+                <td class="table-cell">${s.fechaRealizacion ? formatDateShort(s.fechaRealizacion) : '-'}</td>
                 <td class="table-cell ${notasClass}">${notasMotivo}</td>
               </tr>
             `
@@ -633,6 +645,28 @@ export default function ReportesPage() {
                 }}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
               />
+            </div>
+          </div>
+
+          {/* Filtro por Estado */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Estado</label>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: 'todos', label: 'Todos', active: 'bg-neutral text-white', idle: 'bg-gray-100 text-gray-700 hover:bg-gray-200' },
+                { key: 'pendiente', label: 'Pendientes', active: 'bg-yellow-500 text-white', idle: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200' },
+                { key: 'en_camino', label: 'En Camino', active: 'bg-blue-500 text-white', idle: 'bg-blue-100 text-blue-800 hover:bg-blue-200' },
+                { key: 'realizada', label: 'Realizadas', active: 'bg-green-500 text-white', idle: 'bg-green-100 text-green-800 hover:bg-green-200' },
+                { key: 'no_realizada', label: 'No Realizadas', active: 'bg-red-500 text-white', idle: 'bg-red-100 text-red-800 hover:bg-red-200' },
+              ].map(({ key, label, active, idle }) => (
+                <button
+                  key={key}
+                  onClick={() => setFiltroEstado(key)}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-colors text-sm ${filtroEstado === key ? active : idle}`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
 

@@ -75,8 +75,14 @@ export async function GET(request: NextRequest) {
       baseWhere.tipoPago = { equals: tipoPago }
     }
 
-    // Where para el detalle (agrega búsqueda de texto)
+    // Filtro de estado (solo afecta el detalle/tabla, no las estadísticas del período)
+    const estadoFiltro = searchParams.get('estado')
+
+    // Where para el detalle (agrega búsqueda de texto y estado)
     const detailWhere: any = { ...baseWhere }
+    if (estadoFiltro && estadoFiltro !== 'todos') {
+      detailWhere.estado = { equals: estadoFiltro }
+    }
     if (busqueda) {
       detailWhere.or = [
         { nombre: { contains: busqueda } },
