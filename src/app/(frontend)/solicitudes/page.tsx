@@ -124,7 +124,9 @@ export default function SolicitudesPage() {
         tipoPago: editData.tipoPago,
         coordenadas: editData.coordenadas,
         notas: editData.notas,
-        fechaSolicitud: editData.fechaSolicitud || null,
+        fechaSolicitud: editData.fechaSolicitud
+          ? `${editData.fechaSolicitud}T12:00:00.000Z`
+          : null,
         estado: editData.estado,
         fechaRealizacion: editData.fechaRealizacion || null,
         motivoNoRealizacion: editData.motivoNoRealizacion,
@@ -254,7 +256,7 @@ export default function SolicitudesPage() {
 
   const formatDateShort = (dateString?: string) => {
     if (!dateString) return <span className="text-gray-400 italic text-xs">—</span>
-    return new Date(dateString).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    return dateString.split('T')[0].split('-').reverse().join('/')
   }
 
   // Filtro local por fecha (sobre los docs de la página actual)
@@ -915,11 +917,7 @@ export default function SolicitudesPage() {
                         </svg>
                         <p className="text-blue-700 font-medium">
                           {selectedSolicitud.fechaSolicitud
-                            ? new Date(selectedSolicitud.fechaSolicitud).toLocaleDateString('es-AR', {
-                                day: '2-digit',
-                                month: '2-digit',
-                                year: 'numeric',
-                              })
+                            ? selectedSolicitud.fechaSolicitud.split('T')[0].split('-').reverse().join('/')
                             : 'No especificada'}
                         </p>
                       </div>

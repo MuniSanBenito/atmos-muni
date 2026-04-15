@@ -26,7 +26,7 @@ export default function NuevaSolicitudPage() {
     tipoPago: 'subsidiado',
     coordenadas: '',
     notas: '',
-    fechaSolicitud: new Date().toISOString().split('T')[0],
+    fechaSolicitud: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` })(),
   })
 
   useEffect(() => {
@@ -75,7 +75,12 @@ export default function NuevaSolicitudPage() {
       const response = await fetch('/api/solicitudes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          fechaSolicitud: formData.fechaSolicitud
+            ? `${formData.fechaSolicitud}T12:00:00.000Z`
+            : formData.fechaSolicitud,
+        }),
         credentials: 'include',
       })
 

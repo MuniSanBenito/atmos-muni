@@ -150,12 +150,8 @@ export default function ReportesPage() {
   }
 
   const formatDateShort = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('es-AR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
+    if (!dateString) return '-'
+    return dateString.split('T')[0].split('-').reverse().join('/')
   }
 
   const getEstadoLabel = (estado: string) => {

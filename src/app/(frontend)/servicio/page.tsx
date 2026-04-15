@@ -671,11 +671,7 @@ export default function ServicioPage() {
                 <h3 className="text-sm font-semibold text-gray-500 mb-2">Fecha de Solicitud</h3>
                 <p className="text-neutral">
                   {selectedSolicitud.fechaSolicitud 
-                    ? new Date(selectedSolicitud.fechaSolicitud).toLocaleDateString('es-AR', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                      })
+                    ? selectedSolicitud.fechaSolicitud.split('T')[0].split('-').reverse().join('/')
                     : 'No especificada'}
                 </p>
               </div>
