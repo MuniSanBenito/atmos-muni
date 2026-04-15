@@ -13,6 +13,27 @@ import {
   PaginationState,
 } from '@tanstack/react-table'
 
+interface Barrio {
+  id: string
+  nombre: string
+  orden: number
+}
+
+interface EditData {
+  nombre: string
+  apellido: string
+  telefono: string
+  direccion: string
+  barrio: string
+  tipoPago: 'subsidiado' | 'pagado'
+  coordenadas: string
+  notas: string
+  fechaSolicitud: string
+  estado: 'pendiente' | 'en_camino' | 'realizada' | 'no_realizada'
+  fechaRealizacion: string
+  motivoNoRealizacion: string
+}
+
 interface Solicitud {
   id: string
   nombre: string
@@ -49,6 +70,90 @@ export default function SolicitudesPage() {
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 25 })
   const busquedaRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [busquedaDebounced, setBusquedaDebounced] = useState<string>('')
+  const [editMode, setEditMode] = useState(false)
+  const [editData, setEditData] = useState<EditData | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+  const [barrios, setBarrios] = useState<Barrio[]>([])
+
+  const fetchBarrios = useCallback(async () => {
+    try {
+      const res = await fetchAuth('/api/get-barrios')
+      const data = await res.json()
+      if (data.success) setBarrios(data.barrios)
+    } catch {
+      // no-op
+    }
+  }, [])
+
+  const handleEdit = (sol: Solicitud) => {
+    setEditData({
+      nombre: sol.nombre,
+      apellido: sol.apellido,
+      telefono: sol.telefono,
+      direccion: sol.direccion,
+      barrio: sol.barrio?.id ?? '',
+      tipoPago: sol.tipoPago,
+      coordenadas: sol.coordenadas ?? '',
+      notas: sol.notas ?? '',
+      fechaSolicitud: sol.fechaSolicitud ? sol.fechaSolicitud.split('T')[0] : '',
+      estado: sol.estado,
+      fechaRealizacion: sol.fechaRealizacion ? sol.fechaRealizacion.split('T')[0] : '',
+      motivoNoRealizacion: sol.motivoNoRealizacion ?? '',
+    })
+    setEditMode(true)
+    setEditError(null)
+  }
+
+  const handleCancelEdit = () => {
+    setEditMode(false)
+    setEditData(null)
+    setEditError(null)
+  }
+
+  const handleSave = async () => {
+    if (!selectedSolicitud || !editData) return
+    setSaving(true)
+    setEditError(null)
+    try {
+      const payload: Record<string, any> = {
+        nombre: editData.nombre,
+        apellido: editData.apellido,
+        telefono: editData.telefono,
+        direccion: editData.direccion,
+        tipoPago: editData.tipoPago,
+        coordenadas: editData.coordenadas,
+        notas: editData.notas,
+        fechaSolicitud: editData.fechaSolicitud || null,
+        estado: editData.estado,
+        fechaRealizacion: editData.fechaRealizacion || null,
+        motivoNoRealizacion: editData.motivoNoRealizacion,
+      }
+      if (editData.barrio) payload.barrio = editData.barrio
+      else payload.barrio = null
+
+      const res = await fetchAuth(`/api/solicitudes/${selectedSolicitud.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const result = await res.json()
+      if (!res.ok || !result.success) {
+        setEditError(result.error ?? 'Error al guardar')
+        return
+      }
+      await fetchSolicitudes()
+      setSelectedSolicitud((prev) =>
+        prev ? { ...prev, ...result.solicitud, barrio: result.solicitud.barrio ?? prev.barrio } : null,
+      )
+      setEditMode(false)
+      setEditData(null)
+    } catch {
+      setEditError('Error de conexión al guardar')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const fetchSolicitudes = useCallback(async () => {
     setLoading(true)
@@ -82,9 +187,12 @@ export default function SolicitudesPage() {
     if (!authLoading) {
       if (!user) router.replace('/login')
       else if (user.role === 'driver') router.replace('/servicio')
-      else fetchSolicitudes()
+      else {
+        fetchSolicitudes()
+        fetchBarrios()
+      }
     }
-  }, [user, authLoading, router, fetchSolicitudes])
+  }, [user, authLoading, router, fetchSolicitudes, fetchBarrios])
 
   // Debounce búsqueda
   useEffect(() => {
@@ -528,7 +636,7 @@ export default function SolicitudesPage() {
       {selectedSolicitud && (
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-          onClick={() => setSelectedSolicitud(null)}
+          onClick={() => { setSelectedSolicitud(null); handleCancelEdit() }}
         >
           <div
             className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
@@ -544,7 +652,7 @@ export default function SolicitudesPage() {
                   <p className="text-white/90">Detalles de la Solicitud</p>
                 </div>
                 <button
-                  onClick={() => setSelectedSolicitud(null)}
+                  onClick={() => { setSelectedSolicitud(null); handleCancelEdit() }}
                   className="text-white hover:bg-white/20 rounded-lg p-2 transition-colors"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -561,171 +669,327 @@ export default function SolicitudesPage() {
 
             {/* Contenido del Modal */}
             <div className="p-6 space-y-6">
-              {/* Estado */}
-              <div>
-                <h3 className="text-sm font-semibold text-gray-500 mb-2">Estado Actual</h3>
-                <div>{getEstadoBadge(selectedSolicitud.estado)}</div>
-              </div>
-
-              {/* Información de Contacto */}
-              <div>
-                <h3 className="text-sm font-semibold text-gray-500 mb-3">
-                  Información de Contacto
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Teléfono</p>
-                    <p className="font-medium text-neutral">{selectedSolicitud.telefono}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Tipo de Servicio</p>
-                    <div>{getTipoPagoBadge(selectedSolicitud.tipoPago)}</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Ubicación */}
-              <div>
-                <h3 className="text-sm font-semibold text-gray-500 mb-3">Ubicación</h3>
-                <div className="space-y-3">
-                  {selectedSolicitud.barrio && (
+              {editMode && editData ? (
+                <>
+                  {/* Formulario de Edición */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <p className="text-xs text-gray-500 mb-1">Barrio</p>
-                      <p className="font-medium text-neutral">{selectedSolicitud.barrio.nombre}</p>
+                      <label className="text-xs font-semibold text-gray-500 block mb-1">Nombre</label>
+                      <input
+                        type="text"
+                        value={editData.nombre}
+                        onChange={(e) => setEditData({ ...editData, nombre: e.target.value })}
+                        className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-gray-500 block mb-1">Apellido</label>
+                      <input
+                        type="text"
+                        value={editData.apellido}
+                        onChange={(e) => setEditData({ ...editData, apellido: e.target.value })}
+                        className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-gray-500 block mb-1">Teléfono</label>
+                      <input
+                        type="text"
+                        value={editData.telefono}
+                        onChange={(e) => setEditData({ ...editData, telefono: e.target.value })}
+                        className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-gray-500 block mb-1">Tipo de Servicio</label>
+                      <select
+                        value={editData.tipoPago}
+                        onChange={(e) => setEditData({ ...editData, tipoPago: e.target.value as EditData['tipoPago'] })}
+                        className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none text-sm"
+                      >
+                        <option value="subsidiado">Subsidiado</option>
+                        <option value="pagado">Pagado</option>
+                      </select>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="text-xs font-semibold text-gray-500 block mb-1">Dirección</label>
+                      <input
+                        type="text"
+                        value={editData.direccion}
+                        onChange={(e) => setEditData({ ...editData, direccion: e.target.value })}
+                        className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-gray-500 block mb-1">Barrio</label>
+                      <select
+                        value={editData.barrio}
+                        onChange={(e) => setEditData({ ...editData, barrio: e.target.value })}
+                        className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none text-sm"
+                      >
+                        <option value="">— Sin barrio —</option>
+                        {barrios.map((b) => (
+                          <option key={b.id} value={b.id}>{b.nombre}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-gray-500 block mb-1">Estado</label>
+                      <select
+                        value={editData.estado}
+                        onChange={(e) => setEditData({ ...editData, estado: e.target.value as EditData['estado'] })}
+                        className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none text-sm"
+                      >
+                        <option value="pendiente">Pendiente</option>
+                        <option value="en_camino">En Camino</option>
+                        <option value="realizada">Realizada</option>
+                        <option value="no_realizada">No Realizada</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-gray-500 block mb-1">Fecha de Solicitud</label>
+                      <input
+                        type="date"
+                        value={editData.fechaSolicitud}
+                        onChange={(e) => setEditData({ ...editData, fechaSolicitud: e.target.value })}
+                        className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none text-sm"
+                      />
+                    </div>
+                    {editData.estado === 'realizada' && (
+                      <div>
+                        <label className="text-xs font-semibold text-gray-500 block mb-1">Fecha de Realización</label>
+                        <input
+                          type="date"
+                          value={editData.fechaRealizacion}
+                          onChange={(e) => setEditData({ ...editData, fechaRealizacion: e.target.value })}
+                          className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none text-sm"
+                        />
+                      </div>
+                    )}
+                    <div className="md:col-span-2">
+                      <label className="text-xs font-semibold text-gray-500 block mb-1">Coordenadas GPS</label>
+                      <input
+                        type="text"
+                        value={editData.coordenadas}
+                        onChange={(e) => setEditData({ ...editData, coordenadas: e.target.value })}
+                        placeholder="-26.123456, -54.654321"
+                        className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none text-sm font-mono"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="text-xs font-semibold text-gray-500 block mb-1">Notas Adicionales</label>
+                      <textarea
+                        value={editData.notas}
+                        onChange={(e) => setEditData({ ...editData, notas: e.target.value })}
+                        rows={3}
+                        className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none text-sm resize-none"
+                      />
+                    </div>
+                    {editData.estado === 'no_realizada' && (
+                      <div className="md:col-span-2">
+                        <label className="text-xs font-semibold text-gray-500 block mb-1">Motivo de No Realización</label>
+                        <textarea
+                          value={editData.motivoNoRealizacion}
+                          onChange={(e) => setEditData({ ...editData, motivoNoRealizacion: e.target.value })}
+                          rows={3}
+                          className="w-full px-3 py-2 border-2 border-red-200 rounded-lg focus:border-red-400 focus:outline-none text-sm resize-none"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {editError && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
+                      {editError}
                     </div>
                   )}
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Dirección</p>
-                    <p className="font-medium text-neutral">{selectedSolicitud.direccion}</p>
+
+                  <div className="pt-4 border-t flex gap-3">
+                    <button
+                      onClick={handleSave}
+                      disabled={saving}
+                      className="flex-1 px-6 py-3 bg-primary text-white font-semibold rounded-lg hover:bg-neutral transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {saving ? 'Guardando...' : 'Guardar Cambios'}
+                    </button>
+                    <button
+                      onClick={handleCancelEdit}
+                      disabled={saving}
+                      className="px-6 py-3 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-60"
+                    >
+                      Cancelar
+                    </button>
                   </div>
-                  {selectedSolicitud.coordenadas && (
+                </>
+              ) : (
+                <>
+                  {/* Estado */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-500 mb-2">Estado Actual</h3>
+                    <div>{getEstadoBadge(selectedSolicitud.estado)}</div>
+                  </div>
+
+                  {/* Información de Contacto */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-500 mb-3">
+                      Información de Contacto
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Teléfono</p>
+                        <p className="font-medium text-neutral">{selectedSolicitud.telefono}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Tipo de Servicio</p>
+                        <div>{getTipoPagoBadge(selectedSolicitud.tipoPago)}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Ubicación */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-500 mb-3">Ubicación</h3>
+                    <div className="space-y-3">
+                      {selectedSolicitud.barrio && (
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1">Barrio</p>
+                          <p className="font-medium text-neutral">{selectedSolicitud.barrio.nombre}</p>
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Dirección</p>
+                        <p className="font-medium text-neutral">{selectedSolicitud.direccion}</p>
+                      </div>
+                      {selectedSolicitud.coordenadas && (
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1">Coordenadas GPS</p>
+                          <p className="font-medium text-neutral font-mono text-sm mb-3">
+                            📍 {selectedSolicitud.coordenadas}
+                          </p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${selectedSolicitud.coordenadas.replace(/\s/g, '')}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-neutral transition-colors font-medium text-sm flex items-center justify-center gap-2"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                              Ver en Maps
+                            </a>
+                            <a
+                              href={`https://www.google.com/maps/dir/?api=1&destination=${selectedSolicitud.coordenadas.replace(/\s/g, '')}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-blue-600 transition-colors font-medium text-sm flex items-center justify-center gap-2"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                              </svg>
+                              Navegar
+                            </a>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Notas */}
+                  {selectedSolicitud.notas && (
                     <div>
-                      <p className="text-xs text-gray-500 mb-1">Coordenadas GPS</p>
-                      <p className="font-medium text-neutral font-mono text-sm mb-3">
-                        📍 {selectedSolicitud.coordenadas}
-                      </p>
-                      <div className="grid grid-cols-2 gap-2">
-                        <a
-                          href={`https://www.google.com/maps/search/?api=1&query=${selectedSolicitud.coordenadas.replace(/\s/g, '')}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-neutral transition-colors font-medium text-sm flex items-center justify-center gap-2"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                          </svg>
-                          Ver en Maps
-                        </a>
-                        <a
-                          href={`https://www.google.com/maps/dir/?api=1&destination=${selectedSolicitud.coordenadas.replace(/\s/g, '')}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-blue-600 transition-colors font-medium text-sm flex items-center justify-center gap-2"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                          </svg>
-                          Navegar
-                        </a>
+                      <h3 className="text-sm font-semibold text-gray-500 mb-2">Notas Adicionales</h3>
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <p className="text-gray-700">{selectedSolicitud.notas}</p>
                       </div>
                     </div>
                   )}
-                </div>
-              </div>
 
-              {/* Notas */}
-              {selectedSolicitud.notas && (
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-500 mb-2">Notas Adicionales</h3>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <p className="text-gray-700">{selectedSolicitud.notas}</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Fecha de Solicitud */}
-              <div>
-                <h3 className="text-sm font-semibold text-gray-500 mb-2">Fecha de Solicitud</h3>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="flex items-center gap-2">
-                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <p className="text-blue-700 font-medium">
-                      {selectedSolicitud.fechaSolicitud 
-                        ? new Date(selectedSolicitud.fechaSolicitud).toLocaleDateString('es-AR', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                          })
-                        : 'No especificada'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Fecha de Realización */}
-              {selectedSolicitud.fechaRealizacion && (
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-500 mb-2">Fecha de Realización</h3>
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <div className="flex items-center gap-2">
-                      <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <p className="text-green-700 font-medium">{formatDate(selectedSolicitud.fechaRealizacion)}</p>
+                  {/* Fecha de Solicitud */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-500 mb-2">Fecha de Solicitud</h3>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <div className="flex items-center gap-2">
+                        <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <p className="text-blue-700 font-medium">
+                          {selectedSolicitud.fechaSolicitud
+                            ? new Date(selectedSolicitud.fechaSolicitud).toLocaleDateString('es-AR', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                              })
+                            : 'No especificada'}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
 
-              {/* Motivo de No Realización */}
-              {selectedSolicitud.estado === 'no_realizada' && selectedSolicitud.motivoNoRealizacion && (
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-500 mb-2">Motivo de No Realización</h3>
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <div className="flex items-start gap-3">
-                      <svg className="w-5 h-5 text-red-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
-                      <p className="text-red-700">{selectedSolicitud.motivoNoRealizacion}</p>
+                  {/* Fecha de Realización */}
+                  {selectedSolicitud.fechaRealizacion && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-500 mb-2">Fecha de Realización</h3>
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <div className="flex items-center gap-2">
+                          <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <p className="text-green-700 font-medium">{formatDate(selectedSolicitud.fechaRealizacion)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Motivo de No Realización */}
+                  {selectedSolicitud.estado === 'no_realizada' && selectedSolicitud.motivoNoRealizacion && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-500 mb-2">Motivo de No Realización</h3>
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div className="flex items-start gap-3">
+                          <svg className="w-5 h-5 text-red-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                          <p className="text-red-700">{selectedSolicitud.motivoNoRealizacion}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Fechas */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-500 mb-3">
+                      Información de Registro
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Fecha de Creación</p>
+                        <p className="font-medium text-neutral">
+                          {formatDate(selectedSolicitud.createdAt)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Última Actualización</p>
+                        <p className="font-medium text-neutral">
+                          {formatDate(selectedSolicitud.updatedAt)}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
+
+                  {/* Acciones */}
+                  {user?.role !== 'driver' && (
+                    <div className="pt-4 border-t">
+                      <button
+                        onClick={() => handleEdit(selectedSolicitud)}
+                        className="w-full px-6 py-3 bg-primary text-white font-semibold rounded-lg hover:bg-neutral transition-colors"
+                      >
+                        Editar Solicitud
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
-
-              {/* Fechas */}
-              <div>
-                <h3 className="text-sm font-semibold text-gray-500 mb-3">
-                  Información de Registro
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Fecha de Creación</p>
-                    <p className="font-medium text-neutral">
-                      {formatDate(selectedSolicitud.createdAt)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Última Actualización</p>
-                    <p className="font-medium text-neutral">
-                      {formatDate(selectedSolicitud.updatedAt)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Botón de Editar en Admin */}
-              <div className="pt-4 border-t">
-                <a
-                  href={`/admin/collections/solicitudes/${selectedSolicitud.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block w-full text-center px-6 py-3 bg-neutral text-white font-semibold rounded-lg hover:bg-primary transition-colors"
-                >
-                  Editar en Panel de Administración
-                </a>
-              </div>
             </div>
           </div>
         </div>
