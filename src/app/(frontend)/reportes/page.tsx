@@ -239,7 +239,6 @@ export default function ReportesPage() {
     }),
     reporteColumnHelper.accessor('fechaRealizacion', {
       header: 'F. Realización',
-      enableSorting: false,
       cell: (info) => info.getValue()
         ? <span className="text-sm whitespace-nowrap text-green-700">{formatDateShort(info.getValue())}</span>
         : <span className="text-gray-400 text-xs">—</span>,
@@ -613,7 +612,7 @@ export default function ReportesPage() {
 
             {/* Fecha Desde */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Fecha Desde</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Fecha Desde <span className="text-xs text-gray-500 font-normal">(por fecha de creación)</span></label>
               <input
                 type="date"
                 value={fechaDesde}
@@ -629,7 +628,7 @@ export default function ReportesPage() {
 
             {/* Fecha Hasta */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Fecha Hasta</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Fecha Hasta <span className="text-xs text-gray-500 font-normal">(por fecha de creación)</span></label>
               <input
                 type="date"
                 value={fechaHasta}

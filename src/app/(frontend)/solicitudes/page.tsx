@@ -65,6 +65,7 @@ export default function SolicitudesPage() {
   const [filtroEstado, setFiltroEstado] = useState<string>('todas')
   const [busqueda, setBusqueda] = useState<string>('')
   const [filtroFecha, setFiltroFecha] = useState<string>('')
+  const [tipoFecha, setTipoFecha] = useState<'creacion' | 'solicitud' | 'realizacion'>('solicitud')
   const [filtroTipoPago, setFiltroTipoPago] = useState<string>('todos')
   const [sorting, setSorting] = useState<SortingState>([{ id: 'createdAt', desc: true }])
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 25 })
@@ -211,7 +212,7 @@ export default function SolicitudesPage() {
   // Reset página al cambiar filtros
   useEffect(() => {
     setPagination((p) => ({ ...p, pageIndex: 0 }))
-  }, [filtroEstado, filtroFecha, filtroTipoPago])
+  }, [filtroEstado, filtroFecha, tipoFecha, filtroTipoPago])
 
   const getEstadoBadge = (estado: string) => {
     const badges: Record<string, string> = {
@@ -263,11 +264,16 @@ export default function SolicitudesPage() {
   const solicitudesFiltradas = useMemo(() => {
     if (!filtroFecha) return solicitudes
     return solicitudes.filter((s) => {
-      const fechaCreacion = new Date(s.createdAt).toISOString().split('T')[0]
-      const fechaSol = s.fechaSolicitud ? new Date(s.fechaSolicitud).toISOString().split('T')[0] : null
-      return fechaCreacion === filtroFecha || fechaSol === filtroFecha
+      const field =
+        tipoFecha === 'creacion'
+          ? s.createdAt
+          : tipoFecha === 'solicitud'
+            ? s.fechaSolicitud
+            : s.fechaRealizacion
+      if (!field) return false
+      return new Date(field).toISOString().split('T')[0] === filtroFecha
     })
-  }, [solicitudes, filtroFecha])
+  }, [solicitudes, filtroFecha, tipoFecha])
 
   const columns = useMemo(
     () => [
@@ -318,7 +324,6 @@ export default function SolicitudesPage() {
       }),
       columnHelper.accessor('fechaRealizacion', {
         header: 'F. Realización',
-        enableSorting: false,
         cell: (info) => formatDateShort(info.getValue()),
       }),
     ],
@@ -345,6 +350,7 @@ export default function SolicitudesPage() {
     setFiltroTipoPago('todos')
     setBusqueda('')
     setFiltroFecha('')
+    setTipoFecha('solicitud')
     setSorting([{ id: 'createdAt', desc: true }])
     setPagination({ pageIndex: 0, pageSize: 25 })
   }
@@ -409,7 +415,17 @@ export default function SolicitudesPage() {
             </div>
             <div>
               <label className="text-sm font-bold text-neutral block mb-2">📅 Filtrar por Día</label>
-              <div className="flex gap-2 items-center">
+              <div className="flex gap-2 items-center flex-wrap">
+                <select
+                  value={tipoFecha}
+                  onChange={(e) => setTipoFecha(e.target.value as typeof tipoFecha)}
+                  className="px-3 py-2.5 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition-colors text-sm bg-white"
+                  title="Qué fecha se usa para filtrar"
+                >
+                  <option value="creacion">F. Creación</option>
+                  <option value="solicitud">F. Solicitud</option>
+                  <option value="realizacion">F. Realización</option>
+                </select>
                 <input
                   type="date"
                   value={filtroFecha}
@@ -420,6 +436,7 @@ export default function SolicitudesPage() {
                   <button onClick={() => setFiltroFecha('')} className="px-3 py-2 text-sm bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors">✕</button>
                 )}
               </div>
+              <p className="text-xs text-gray-500 mt-1">Filtra la página actual según la fecha seleccionada.</p>
             </div>
           </div>
 
@@ -471,7 +488,7 @@ export default function SolicitudesPage() {
               <div className="flex flex-wrap gap-2 items-center text-sm text-gray-600">
                 <span className="font-medium">Filtros activos:</span>
                 {busqueda && <span className="px-2 py-0.5 bg-primary/10 text-primary rounded-full text-xs">Búsqueda: "{busqueda}"</span>}
-                {filtroFecha && <span className="px-2 py-0.5 bg-accent/10 text-accent rounded-full text-xs">Fecha: {new Date(filtroFecha + 'T12:00:00').toLocaleDateString('es-AR')}</span>}
+                {filtroFecha && <span className="px-2 py-0.5 bg-accent/10 text-accent rounded-full text-xs">{tipoFecha === 'creacion' ? 'F. Creación' : tipoFecha === 'solicitud' ? 'F. Solicitud' : 'F. Realización'}: {new Date(filtroFecha + 'T12:00:00').toLocaleDateString('es-AR')}</span>}
                 {filtroEstado !== 'todas' && <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full text-xs capitalize">{filtroEstado.replace('_', ' ')}</span>}
                 {filtroTipoPago !== 'todos' && <span className="px-2 py-0.5 bg-primary/10 text-primary rounded-full text-xs capitalize">{filtroTipoPago}</span>}
               </div>
