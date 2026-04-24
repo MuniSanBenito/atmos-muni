@@ -192,6 +192,26 @@ export interface Solicitude {
   estado: 'pendiente' | 'en_camino' | 'realizada' | 'no_realizada';
   fechaRealizacion?: string | null;
   motivoNoRealizacion?: string | null;
+  /**
+   * Visitas previas del chofer donde no se pudo completar el servicio
+   */
+  intentos?:
+    | {
+        fecha: string;
+        motivo:
+          | 'no_habia_nadie'
+          | 'porton_cerrado'
+          | 'no_atendio'
+          | 'direccion_incorrecta'
+          | 'cliente_cancelo'
+          | 'otro';
+        resultado: 'reintentar' | 'cancelar';
+        notas?: string | null;
+        coordenadas?: string | null;
+        chofer?: (string | null) | User;
+        id?: string | null;
+      }[]
+    | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -350,6 +370,17 @@ export interface SolicitudesSelect<T extends boolean = true> {
   estado?: T;
   fechaRealizacion?: T;
   motivoNoRealizacion?: T;
+  intentos?:
+    | T
+    | {
+        fecha?: T;
+        motivo?: T;
+        resultado?: T;
+        notas?: T;
+        coordenadas?: T;
+        chofer?: T;
+        id?: T;
+      };
   updatedAt?: T;
   createdAt?: T;
 }

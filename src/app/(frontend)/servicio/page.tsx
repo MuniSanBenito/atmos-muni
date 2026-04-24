@@ -11,6 +11,24 @@ interface Barrio {
   orden: number
 }
 
+type MotivoIntento =
+  | 'no_habia_nadie'
+  | 'porton_cerrado'
+  | 'no_atendio'
+  | 'direccion_incorrecta'
+  | 'cliente_cancelo'
+  | 'otro'
+
+interface Intento {
+  id?: string
+  fecha: string
+  motivo: MotivoIntento
+  resultado: 'reintentar' | 'cancelar'
+  notas?: string
+  coordenadas?: string
+  chofer?: string | { id: string } | null
+}
+
 interface Solicitud {
   id: string
   nombre: string
@@ -24,6 +42,27 @@ interface Solicitud {
   estado: 'pendiente' | 'en_camino' | 'realizada' | 'no_realizada'
   fechaSolicitud?: string
   createdAt: string
+  intentos?: Intento[]
+}
+
+const MOTIVOS_REINTENTAR: { value: MotivoIntento; label: string }[] = [
+  { value: 'no_habia_nadie', label: 'No había nadie' },
+  { value: 'porton_cerrado', label: 'Portón cerrado' },
+  { value: 'no_atendio', label: 'No atendió el teléfono' },
+]
+
+const MOTIVOS_CANCELAR: { value: MotivoIntento; label: string }[] = [
+  { value: 'direccion_incorrecta', label: 'Dirección incorrecta' },
+  { value: 'cliente_cancelo', label: 'Cliente canceló' },
+]
+
+const MOTIVO_LABELS: Record<MotivoIntento, string> = {
+  no_habia_nadie: 'No había nadie',
+  porton_cerrado: 'Portón cerrado',
+  no_atendio: 'No atendió el teléfono',
+  direccion_incorrecta: 'Dirección incorrecta',
+  cliente_cancelo: 'Cliente canceló',
+  otro: 'Otro',
 }
 
 export default function ServicioPage() {
@@ -36,6 +75,8 @@ export default function ServicioPage() {
   const [showFinalizarModal, setShowFinalizarModal] = useState(false)
   const [estadoFinal, setEstadoFinal] = useState<'realizada' | 'no_realizada'>('realizada')
   const [notaFinal, setNotaFinal] = useState('')
+  const [motivoIntento, setMotivoIntento] = useState<MotivoIntento | ''>('')
+  const [accionIntento, setAccionIntento] = useState<'reintentar' | 'cancelar' | ''>('')
   const [coordenadasCapturadas, setCoordenadasCapturadas] = useState('')
   const [capturandoGPS, setCapturandoGPS] = useState(false)
   const [barrios, setBarrios] = useState<Barrio[]>([])
@@ -174,30 +215,70 @@ export default function ServicioPage() {
   const finalizarServicio = async () => {
     if (!selectedSolicitud) return
 
+    // Validaciones para "No Realizada": motivo obligatorio
+    if (estadoFinal === 'no_realizada') {
+      if (!motivoIntento) {
+        alert('Seleccioná un motivo.')
+        return
+      }
+      if (!accionIntento) {
+        alert('Indicá si vas a reintentar o cancelar.')
+        return
+      }
+    }
+
     setUpdatingState(true)
     try {
-      const dataToUpdate: any = {
-        estado: estadoFinal,
-      }
+      const dataToUpdate: any = {}
 
-      // Si hay coordenadas capturadas y no había antes, agregarlas
+      // Coordenadas que se van a usar (capturadas o existentes)
+      const coordsFinal = coordenadasCapturadas || selectedSolicitud.coordenadas || ''
+
+      // Si hay coordenadas capturadas y no había antes, agregarlas al registro principal
       if (coordenadasCapturadas && !selectedSolicitud.coordenadas) {
         dataToUpdate.coordenadas = coordenadasCapturadas
       }
 
-      // Si es realizada, agregar fecha
       if (estadoFinal === 'realizada') {
+        dataToUpdate.estado = 'realizada'
         dataToUpdate.fechaRealizacion = new Date().toISOString()
-      }
+        if (notaFinal) {
+          dataToUpdate.notas = notaFinal
+        }
+      } else {
+        // No Realizada: agregamos un intento al historial
+        const nuevoIntento: Intento = {
+          fecha: new Date().toISOString(),
+          motivo: motivoIntento as MotivoIntento,
+          resultado: accionIntento as 'reintentar' | 'cancelar',
+          notas: notaFinal || undefined,
+          coordenadas: coordsFinal || undefined,
+          chofer: user?.id,
+        }
 
-      // Si es no realizada, agregar motivo
-      if (estadoFinal === 'no_realizada' && notaFinal) {
-        dataToUpdate.motivoNoRealizacion = notaFinal
-      }
+        // Enviar SOLO los campos editables por el chofer, sin IDs de intentos previos
+        // (Payload reemplaza el array completo; si mandamos objetos con id existente,
+        // igual conserva datos pero enviamos sólo las props relevantes)
+        const intentosPrevios = (selectedSolicitud.intentos || []).map((i) => ({
+          ...(i.id ? { id: i.id } : {}),
+          fecha: i.fecha,
+          motivo: i.motivo,
+          resultado: i.resultado,
+          notas: i.notas,
+          coordenadas: i.coordenadas,
+          chofer: typeof i.chofer === 'object' && i.chofer ? i.chofer.id : i.chofer,
+        }))
 
-      // Si es realizada, guardar observaciones opcionales
-      if (estadoFinal === 'realizada' && notaFinal) {
-        dataToUpdate.notas = notaFinal
+        dataToUpdate.intentos = [...intentosPrevios, nuevoIntento]
+
+        if (accionIntento === 'reintentar') {
+          // Queda pendiente para volver más tarde
+          dataToUpdate.estado = 'pendiente'
+        } else {
+          // Cancelación definitiva
+          dataToUpdate.estado = 'no_realizada'
+          dataToUpdate.motivoNoRealizacion = `${MOTIVO_LABELS[motivoIntento as MotivoIntento]}${notaFinal ? ` - ${notaFinal}` : ''}`
+        }
       }
 
       const response = await fetchAuth(`/api/solicitudes/${selectedSolicitud.id}`, {
@@ -213,6 +294,8 @@ export default function ServicioPage() {
         setNotaFinal('')
         setCoordenadasCapturadas('')
         setEstadoFinal('realizada')
+        setMotivoIntento('')
+        setAccionIntento('')
       } else {
         const err = await response.json().catch(() => ({}))
         alert(err?.error || 'No se pudo guardar el servicio. Intentá de nuevo.')
@@ -230,6 +313,13 @@ export default function ServicioPage() {
     setShowFinalizarModal(true)
     setNotaFinal('')
     setCoordenadasCapturadas('')
+    setMotivoIntento('')
+    setAccionIntento('')
+  }
+
+  const seleccionarMotivo = (motivo: MotivoIntento, accion: 'reintentar' | 'cancelar') => {
+    setMotivoIntento(motivo)
+    setAccionIntento(accion)
   }
 
   if (loading || (user && user.role !== 'driver')) {
@@ -413,11 +503,16 @@ export default function ServicioPage() {
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-3">
+                      <div className="flex items-center gap-3 mb-3 flex-wrap">
                         <h3 className="text-lg font-bold text-neutral">
                           {solicitud.nombre} {solicitud.apellido}
                         </h3>
                         {getEstadoBadge(solicitud.estado)}
+                        {solicitud.intentos && solicitud.intentos.length > 0 && (
+                          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-800 border border-orange-300">
+                            Visita {solicitud.intentos.length + 1}
+                          </span>
+                        )}
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                         <div className="flex items-center gap-2 text-gray-600">
@@ -667,6 +762,37 @@ export default function ServicioPage() {
                 </div>
               )}
 
+              {selectedSolicitud.intentos && selectedSolicitud.intentos.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-500 mb-2">
+                    Historial de Visitas ({selectedSolicitud.intentos.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {selectedSolicitud.intentos.map((intento, idx) => (
+                      <div
+                        key={intento.id || idx}
+                        className="bg-orange-50 border border-orange-200 rounded-lg p-3"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-bold text-orange-800">
+                            Visita {idx + 1}
+                          </span>
+                          <span className="text-xs text-gray-600">
+                            {formatDate(intento.fecha)}
+                          </span>
+                        </div>
+                        <p className="text-sm font-medium text-neutral">
+                          {MOTIVO_LABELS[intento.motivo] || intento.motivo}
+                        </p>
+                        {intento.notas && (
+                          <p className="text-xs text-gray-600 mt-1">{intento.notas}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <h3 className="text-sm font-semibold text-gray-500 mb-2">Fecha de Solicitud</h3>
                 <p className="text-neutral">
@@ -751,25 +877,43 @@ export default function ServicioPage() {
       {/* Modal de Finalizar Servicio */}
       {showFinalizarModal && selectedSolicitud && (
         <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center sm:p-4 z-50"
           onClick={() => setShowFinalizarModal(false)}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl max-w-lg w-full"
+            className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl max-w-lg w-full max-h-[95vh] sm:max-h-[90vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <div
-              className={`p-6 rounded-t-2xl text-white ${estadoFinal === 'realizada' ? 'bg-green-600' : 'bg-red-600'}`}
+              className={`p-4 sm:p-6 rounded-t-2xl text-white shrink-0 ${estadoFinal === 'realizada' ? 'bg-green-600' : 'bg-red-600'}`}
             >
-              <h2 className="text-2xl font-bold">
-                {estadoFinal === 'realizada' ? 'Marcar como Realizada' : 'Marcar como No Realizada'}
-              </h2>
-              <p className="text-white/90 mt-1">
-                {selectedSolicitud.nombre} {selectedSolicitud.apellido}
-              </p>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-xl sm:text-2xl font-bold">
+                    {estadoFinal === 'realizada' ? 'Marcar como Realizada' : 'No se pudo completar'}
+                  </h2>
+                  <p className="text-white/90 mt-1 text-sm sm:text-base truncate">
+                    {selectedSolicitud.nombre} {selectedSolicitud.apellido}
+                    {estadoFinal === 'no_realizada' && selectedSolicitud.intentos && selectedSolicitud.intentos.length > 0 && (
+                      <span className="ml-2 px-2 py-0.5 rounded-full bg-white/20 text-xs font-semibold">
+                        Visita {selectedSolicitud.intentos.length + 1}
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowFinalizarModal(false)}
+                  className="text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors shrink-0"
+                  aria-label="Cerrar"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
               {/* Capturar Coordenadas si no existen */}
               {!selectedSolicitud.coordenadas && (
                 <div>
@@ -839,23 +983,114 @@ export default function ServicioPage() {
                 </div>
               )}
 
-              {/* Nota para No Realizada */}
+              {/* Motivos para No Realizada */}
               {estadoFinal === 'no_realizada' && (
-                <div>
-                  <label
-                    htmlFor="notaFinal"
-                    className="block text-sm font-semibold text-gray-700 mb-2"
-                  >
-                    Motivo de No Realización
-                  </label>
-                  <textarea
-                    id="notaFinal"
-                    value={notaFinal}
-                    onChange={(e) => setNotaFinal(e.target.value)}
-                    rows={4}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
-                    placeholder="Describe el motivo por el cual no se pudo realizar el servicio..."
-                  />
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-2">
+                      Volver a intentar más tarde
+                    </h3>
+                    <p className="text-xs text-gray-500 mb-2">
+                      El servicio queda pendiente y seguirá visible en tu lista.
+                    </p>
+                    <div className="grid grid-cols-1 gap-2">
+                      {MOTIVOS_REINTENTAR.map((m) => {
+                        const selected = motivoIntento === m.value && accionIntento === 'reintentar'
+                        return (
+                          <button
+                            key={m.value}
+                            type="button"
+                            onClick={() => seleccionarMotivo(m.value, 'reintentar')}
+                            className={`px-4 py-3 rounded-lg border-2 text-left font-medium text-sm transition-colors ${
+                              selected
+                                ? 'border-orange-500 bg-orange-50 text-orange-900'
+                                : 'border-gray-200 bg-white text-gray-700 hover:border-orange-300'
+                            }`}
+                          >
+                            <span className="mr-2">{selected ? '✓' : '○'}</span>
+                            {m.label}
+                          </button>
+                        )
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => seleccionarMotivo('otro', 'reintentar')}
+                        className={`px-4 py-3 rounded-lg border-2 text-left font-medium text-sm transition-colors ${
+                          motivoIntento === 'otro' && accionIntento === 'reintentar'
+                            ? 'border-orange-500 bg-orange-50 text-orange-900'
+                            : 'border-gray-200 bg-white text-gray-700 hover:border-orange-300'
+                        }`}
+                      >
+                        <span className="mr-2">
+                          {motivoIntento === 'otro' && accionIntento === 'reintentar' ? '✓' : '○'}
+                        </span>
+                        Otro motivo (reintentar)
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="border-t pt-4">
+                    <h3 className="text-sm font-semibold text-gray-700 mb-2">
+                      Cancelar servicio definitivamente
+                    </h3>
+                    <p className="text-xs text-gray-500 mb-2">
+                      El servicio se cierra y desaparece de tu lista.
+                    </p>
+                    <div className="grid grid-cols-1 gap-2">
+                      {MOTIVOS_CANCELAR.map((m) => {
+                        const selected = motivoIntento === m.value && accionIntento === 'cancelar'
+                        return (
+                          <button
+                            key={m.value}
+                            type="button"
+                            onClick={() => seleccionarMotivo(m.value, 'cancelar')}
+                            className={`px-4 py-3 rounded-lg border-2 text-left font-medium text-sm transition-colors ${
+                              selected
+                                ? 'border-red-500 bg-red-50 text-red-900'
+                                : 'border-gray-200 bg-white text-gray-700 hover:border-red-300'
+                            }`}
+                          >
+                            <span className="mr-2">{selected ? '✓' : '○'}</span>
+                            {m.label}
+                          </button>
+                        )
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => seleccionarMotivo('otro', 'cancelar')}
+                        className={`px-4 py-3 rounded-lg border-2 text-left font-medium text-sm transition-colors ${
+                          motivoIntento === 'otro' && accionIntento === 'cancelar'
+                            ? 'border-red-500 bg-red-50 text-red-900'
+                            : 'border-gray-200 bg-white text-gray-700 hover:border-red-300'
+                        }`}
+                      >
+                        <span className="mr-2">
+                          {motivoIntento === 'otro' && accionIntento === 'cancelar' ? '✓' : '○'}
+                        </span>
+                        Otro motivo (cancelar)
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="notaFinal"
+                      className="block text-sm font-semibold text-gray-700 mb-2"
+                    >
+                      Observaciones{' '}
+                      <span className="text-gray-500 text-xs">
+                        ({motivoIntento === 'otro' ? 'Requerido' : 'Opcional'})
+                      </span>
+                    </label>
+                    <textarea
+                      id="notaFinal"
+                      value={notaFinal}
+                      onChange={(e) => setNotaFinal(e.target.value)}
+                      rows={3}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                      placeholder="Agrega detalles sobre lo que pasó..."
+                    />
+                  </div>
                 </div>
               )}
 
@@ -879,27 +1114,44 @@ export default function ServicioPage() {
                 </div>
               )}
 
-              {/* Botones */}
-              <div className="flex gap-3 pt-4">
+            </div>
+
+            {/* Botones fijos abajo */}
+            <div className="flex gap-3 p-4 sm:p-6 border-t border-gray-200 bg-white rounded-b-2xl shrink-0">
                 <button
                   onClick={() => setShowFinalizarModal(false)}
                   disabled={updatingState}
-                  className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  className="flex-1 px-4 sm:px-6 py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 text-sm sm:text-base"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={finalizarServicio}
-                  disabled={updatingState || (estadoFinal === 'no_realizada' && !notaFinal.trim())}
-                  className={`flex-1 px-6 py-3 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 ${
+                  disabled={
+                    updatingState ||
+                    (estadoFinal === 'no_realizada' &&
+                      (!motivoIntento ||
+                        !accionIntento ||
+                        (motivoIntento === 'otro' && !notaFinal.trim())))
+                  }
+                  className={`flex-1 px-4 sm:px-6 py-3 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 text-sm sm:text-base ${
                     estadoFinal === 'realizada'
                       ? 'bg-green-600 hover:bg-green-700'
-                      : 'bg-red-600 hover:bg-red-700'
+                      : accionIntento === 'reintentar'
+                        ? 'bg-orange-500 hover:bg-orange-600'
+                        : 'bg-red-600 hover:bg-red-700'
                   }`}
                 >
-                  {updatingState ? 'Guardando...' : 'Confirmar'}
+                  {updatingState
+                    ? 'Guardando...'
+                    : estadoFinal === 'realizada'
+                      ? 'Confirmar'
+                      : accionIntento === 'reintentar'
+                        ? 'Registrar y reintentar'
+                        : accionIntento === 'cancelar'
+                          ? 'Cancelar servicio'
+                          : 'Confirmar'}
                 </button>
-              </div>
             </div>
           </div>
         </div>

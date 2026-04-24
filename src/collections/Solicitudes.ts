@@ -141,6 +141,65 @@ export const Solicitudes: CollectionConfig = {
         condition: (data) => data.estado === 'no_realizada',
       },
     },
+    {
+      name: 'intentos',
+      type: 'array',
+      label: 'Historial de Visitas',
+      admin: {
+        description: 'Visitas previas del chofer donde no se pudo completar el servicio',
+      },
+      fields: [
+        {
+          name: 'fecha',
+          type: 'date',
+          required: true,
+          label: 'Fecha y Hora',
+          admin: {
+            date: { pickerAppearance: 'dayAndTime' },
+          },
+        },
+        {
+          name: 'motivo',
+          type: 'select',
+          required: true,
+          label: 'Motivo',
+          options: [
+            { label: 'No había nadie', value: 'no_habia_nadie' },
+            { label: 'Portón cerrado', value: 'porton_cerrado' },
+            { label: 'No atendió el teléfono', value: 'no_atendio' },
+            { label: 'Dirección incorrecta', value: 'direccion_incorrecta' },
+            { label: 'Cliente canceló', value: 'cliente_cancelo' },
+            { label: 'Otro', value: 'otro' },
+          ],
+        },
+        {
+          name: 'resultado',
+          type: 'select',
+          required: true,
+          label: 'Resultado',
+          options: [
+            { label: 'Reintentar', value: 'reintentar' },
+            { label: 'Cancelar', value: 'cancelar' },
+          ],
+        },
+        {
+          name: 'notas',
+          type: 'textarea',
+          label: 'Observaciones',
+        },
+        {
+          name: 'coordenadas',
+          type: 'text',
+          label: 'Coordenadas GPS al momento del intento',
+        },
+        {
+          name: 'chofer',
+          type: 'relationship',
+          relationTo: 'users',
+          label: 'Chofer',
+        },
+      ],
+    },
   ],
   timestamps: true,
 }
