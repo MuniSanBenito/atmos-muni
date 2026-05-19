@@ -85,14 +85,17 @@ export async function GET(request: NextRequest) {
       where.tipoPago = { equals: tipoPago }
     }
 
-    // Búsqueda de texto en nombre, apellido, telefono, direccion
+    // Búsqueda de texto: tokeniza por espacios, AND entre tokens, OR entre campos
     if (busqueda) {
-      where.or = [
-        { nombre: { contains: busqueda } },
-        { apellido: { contains: busqueda } },
-        { telefono: { contains: busqueda } },
-        { direccion: { contains: busqueda } },
-      ]
+      const tokens = busqueda.split(/\s+/).filter(Boolean)
+      where.and = tokens.map((token) => ({
+        or: [
+          { nombre: { contains: token } },
+          { apellido: { contains: token } },
+          { telefono: { contains: token } },
+          { direccion: { contains: token } },
+        ],
+      }))
     }
 
     const solicitudes = await payload.find({

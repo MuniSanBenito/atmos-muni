@@ -84,12 +84,15 @@ export async function GET(request: NextRequest) {
       detailWhere.estado = { equals: estadoFiltro }
     }
     if (busqueda) {
-      detailWhere.or = [
-        { nombre: { contains: busqueda } },
-        { apellido: { contains: busqueda } },
-        { telefono: { contains: busqueda } },
-        { direccion: { contains: busqueda } },
-      ]
+      const tokens = busqueda.split(/\s+/).filter(Boolean)
+      detailWhere.and = tokens.map((token) => ({
+        or: [
+          { nombre: { contains: token } },
+          { apellido: { contains: token } },
+          { telefono: { contains: token } },
+          { direccion: { contains: token } },
+        ],
+      }))
     }
 
     // Estadísticas con count en paralelo (sin traer docs, muy eficiente)
