@@ -14,7 +14,10 @@ WORKDIR /app
 # Install dependencies based on the preferred package manager
 COPY package.json pnpm-lock.yaml .npmrc* ./
 
-RUN corepack enable && pnpm install --frozen-lockfile
+RUN corepack enable \
+  && corepack prepare pnpm@10.5.2 --activate \
+  && pnpm --version \
+  && pnpm install --frozen-lockfile
 
 # Rebuild the source code only when needed
 FROM base AS builder
@@ -33,7 +36,10 @@ ENV DATABASE_URI=$DATABASE_URI
 ARG PAYLOAD_SECRET
 ENV PAYLOAD_SECRET=$PAYLOAD_SECRET
 
-RUN corepack enable && pnpm run build
+RUN corepack enable \
+  && corepack prepare pnpm@10.5.2 --activate \
+  && pnpm --version \
+  && pnpm run build
 
 # Production image, copy all the files and run next
 FROM base AS runner
